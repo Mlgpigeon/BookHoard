@@ -6,7 +6,7 @@ plugins {
 }
 
 android {
-    namespace = "com.example.bookhoard"
+    namespace = "com.example.mybookhoard"
     compileSdk = 36
 
     defaultConfig {

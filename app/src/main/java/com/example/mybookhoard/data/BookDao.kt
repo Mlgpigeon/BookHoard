@@ -1,0 +1,74 @@
+package com.example.mybookhoard.data
+
+import androidx.room.*
+import kotlinx.coroutines.flow.Flow
+
+@Dao
+interface BookDao {
+    @Query("SELECT * FROM books ORDER BY title COLLATE NOCASE")
+    fun all(): Flow<List<Book>>
+
+    @Query("SELECT * FROM books WHERE id = :id")
+    fun getBookById(id: Long): Flow<Book?>
+
+    @Query("""
+        SELECT * FROM books 
+        WHERE title LIKE :query 
+           OR author LIKE :query 
+           OR saga LIKE :query 
+        ORDER BY title COLLATE NOCASE
+    """)
+    fun searchBooks(query: String): Flow<List<Book>>
+
+    @Query("""
+        SELECT * FROM books 
+        WHERE wishlist IS NOT NULL 
+          AND (title LIKE :query OR author LIKE :query OR saga LIKE :query)
+        ORDER BY title COLLATE NOCASE
+    """)
+    fun searchWishlistBooks(query: String): Flow<List<Book>>
+
+    @Query("SELECT * FROM books WHERE status = :status ORDER BY title COLLATE NOCASE")
+    fun getBooksByStatus(status: ReadingStatus): Flow<List<Book>>
+
+    @Query("SELECT * FROM books WHERE wishlist = :wishlistStatus ORDER BY title COLLATE NOCASE")
+    fun getBooksByWishlistStatus(wishlistStatus: WishlistStatus): Flow<List<Book>>
+
+    @Query("SELECT * FROM books WHERE author = :author ORDER BY title COLLATE NOCASE")
+    fun getBooksByAuthor(author: String): Flow<List<Book>>
+
+    @Query("SELECT * FROM books WHERE saga = :saga ORDER BY title COLLATE NOCASE")
+    fun getBooksBySaga(saga: String): Flow<List<Book>>
+
+    // Query para obtener autores únicos
+    @Query("SELECT DISTINCT author FROM books WHERE author IS NOT NULL AND author != '' ORDER BY author COLLATE NOCASE")
+    fun getUniqueAuthors(): Flow<List<String>>
+
+    // Nueva query para obtener sagas únicas
+    @Query("SELECT DISTINCT saga FROM books WHERE saga IS NOT NULL AND saga != '' ORDER BY saga COLLATE NOCASE")
+    fun getUniqueSagas(): Flow<List<String>>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertAll(items: List<Book>)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsert(book: Book): Long
+
+    @Update
+    suspend fun update(book: Book)
+
+    @Delete
+    suspend fun delete(book: Book)
+
+    @Query("DELETE FROM books")
+    suspend fun clear()
+
+    @Query("SELECT COUNT(*) FROM books")
+    suspend fun count(): Int
+
+    @Query("SELECT COUNT(*) FROM books WHERE status = :status")
+    suspend fun countByStatus(status: ReadingStatus): Int
+
+    @Query("SELECT COUNT(*) FROM books WHERE wishlist = :wishlistStatus")
+    suspend fun countByWishlistStatus(wishlistStatus: WishlistStatus): Int
+}

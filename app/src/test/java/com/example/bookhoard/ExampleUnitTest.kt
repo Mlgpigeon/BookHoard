@@ -1,4 +1,4 @@
-package com.example.bookhoard
+package com.example.mybookhoard
 
 import org.junit.Test
 
