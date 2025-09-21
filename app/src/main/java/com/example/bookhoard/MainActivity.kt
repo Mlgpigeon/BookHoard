@@ -17,6 +17,7 @@ import com.example.bookhoard.BooksVm
 import com.example.bookhoard.ui.screens.BooksScreen
 import com.example.bookhoard.ui.screens.WishlistScreen
 import com.example.bookhoard.ui.screens.BookDetailScreen
+import com.example.bookhoard.ui.screens.EditBookScreen
 import com.example.bookhoard.data.Book
 
 class MainActivity : ComponentActivity() {
@@ -38,6 +39,7 @@ sealed class Screen {
     object Add : Screen()
     object Wishlist : Screen()
     data class BookDetail(val bookId: Long) : Screen()
+    data class EditBook(val bookId: Long) : Screen()
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -55,8 +57,15 @@ fun MainScreen(vm: BooksVm) {
                 vm = vm,
                 onNavigateBack = { currentScreen = Screen.Books },
                 onEditBook = { book ->
-                    // TODO: Navigate to edit screen when implemented
+                    currentScreen = Screen.EditBook(book.id)
                 }
+            )
+        }
+        is Screen.EditBook -> {
+            EditBookScreen(
+                bookId = screen.bookId,
+                vm = vm,
+                onNavigateBack = { currentScreen = Screen.Books }
             )
         }
         else -> {
@@ -100,8 +109,8 @@ fun MainScreen(vm: BooksVm) {
                             vm = vm,
                             onBookClick = { book -> currentScreen = Screen.BookDetail(book.id) }
                         )
-                        is Screen.BookDetail -> {
-                            // This case is handled above
+                        is Screen.BookDetail, is Screen.EditBook -> {
+                            // These cases are handled above
                         }
                     }
                 }
