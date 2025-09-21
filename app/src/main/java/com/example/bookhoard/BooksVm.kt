@@ -5,6 +5,7 @@ import android.content.Context
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.bookhoard.data.*
+import com.example.bookhoard.sync.SimplifiedGoogleDriveSync
 import com.example.bookhoard.utils.FuzzySearchUtils
 import com.github.doyaaaaaken.kotlincsv.dsl.csvReader
 import kotlinx.coroutines.FlowPreview
@@ -22,6 +23,9 @@ import kotlinx.coroutines.launch
 @OptIn(FlowPreview::class)
 class BooksVm(app: Application) : AndroidViewModel(app) {
     private val dao = AppDb.get(app).bookDao()
+
+    // 🆕 Google Drive sync service (disponible tras configurar google-services.json)
+    val googleDriveSync = SimplifiedGoogleDriveSync(app)
 
     // Estado original de todos los libros
     val items: Flow<List<Book>> = dao.all()
@@ -233,5 +237,29 @@ class BooksVm(app: Application) : AndroidViewModel(app) {
 
     fun getBookById(id: Long): Flow<Book?> {
         return dao.getBookById(id)
+    }
+
+    // 🆕 Sync methods (disponibles tras configurar Google Services)
+
+    fun uploadToCloud() {
+        viewModelScope.launch {
+            val books = items.firstOrNull() ?: emptyList()
+            googleDriveSync.uploadBooks(books)
+        }
+    }
+
+    fun downloadFromCloud() {
+        viewModelScope.launch {
+            val books = googleDriveSync.downloadBooks()
+            if (books != null) {
+                replaceAll(books)
+            }
+        }
+    }
+
+    fun signOutFromCloud() {
+        viewModelScope.launch {
+            googleDriveSync.signOut()
+        }
     }
 }
