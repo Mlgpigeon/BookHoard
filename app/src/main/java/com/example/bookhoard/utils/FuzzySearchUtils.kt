@@ -165,6 +165,32 @@ object FuzzySearchUtils {
     }
 
     /**
+     * Busca autores usando fuzzy matching y los ordena por relevancia.
+     */
+    fun searchAuthors(authors: List<String>, query: String, threshold: Double = 0.4): List<Pair<String, Double>> {
+        if (query.isBlank()) return emptyList()
+
+        val results = mutableListOf<Pair<String, Double>>()
+
+        for (author in authors) {
+            val score = similarityScore(query, author)
+            if (score >= threshold) {
+                results.add(author to score)
+            }
+        }
+
+        // Ordenar por score descendente y tomar los primeros 5
+        return results.sortedByDescending { it.second }.take(5)
+    }
+
+    /**
+     * Busca autores y devuelve solo la lista de autores ordenada por relevancia.
+     */
+    fun searchAuthorsSimple(authors: List<String>, query: String, threshold: Double = 0.4): List<String> {
+        return searchAuthors(authors, query, threshold).map { it.first }
+    }
+
+    /**
      * Genera sugerencias de búsqueda basadas en los libros disponibles.
      */
     fun generateSearchSuggestions(books: List<Book>, query: String, maxSuggestions: Int = 5): List<String> {

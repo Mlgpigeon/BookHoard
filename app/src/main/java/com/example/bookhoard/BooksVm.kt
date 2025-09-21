@@ -15,6 +15,8 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.firstOrNull
+import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 
 @OptIn(FlowPreview::class)
@@ -78,6 +80,17 @@ class BooksVm(app: Application) : AndroidViewModel(app) {
             combine(items, debouncedSearchQuery) { books, _ ->
                 if (query.length < 2) emptyList()
                 else FuzzySearchUtils.generateSearchSuggestions(books, query)
+            }
+        }
+    }
+
+    // Nueva función para buscar autores con fuzzy search
+    fun searchAuthorSuggestions(query: String): Flow<List<String>> {
+        return if (query.length < 2) {
+            flowOf(emptyList())
+        } else {
+            dao.getUniqueAuthors().map { authors ->
+                FuzzySearchUtils.searchAuthorsSimple(authors, query, threshold = 0.3)
             }
         }
     }
