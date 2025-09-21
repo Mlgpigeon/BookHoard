@@ -22,6 +22,7 @@ import com.example.bookhoard.data.Book
 import com.example.bookhoard.data.ReadingStatus
 import com.example.bookhoard.ui.components.BookRow
 import com.example.bookhoard.ui.components.ViewModeSelector
+import com.example.bookhoard.data.WishlistStatus
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -477,6 +478,20 @@ private fun LiveBookRow(
                         FontWeight.Bold else FontWeight.Normal
                 )
             }
+
+            // Show wishlist status if present
+            if (book.wishlist != null) {
+                Text(
+                    text = when (book.wishlist) {
+                        WishlistStatus.WISH -> "⭐ In Wishlist"
+                        WishlistStatus.ON_THE_WAY -> "📦 On the Way"
+                        WishlistStatus.OBTAINED -> "📚 Obtained"
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.secondary,
+                    fontWeight = FontWeight.Medium
+                )
+            }
         }
 
         Box {
@@ -492,6 +507,15 @@ private fun LiveBookRow(
                 expanded = menuExpanded,
                 onDismissRequest = { menuExpanded = false }
             ) {
+                // Reading Status Section
+                Text(
+                    text = "Reading Status",
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                    color = MaterialTheme.colorScheme.primary
+                )
+
                 DropdownMenuItem(
                     text = { Text("📕 Unread") },
                     onClick = {
@@ -513,6 +537,49 @@ private fun LiveBookRow(
                         menuExpanded = false
                     }
                 )
+
+                HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+
+                // Wishlist Section
+                Text(
+                    text = "Wishlist",
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                    color = MaterialTheme.colorScheme.secondary
+                )
+
+                DropdownMenuItem(
+                    text = { Text("⭐ Add to Wishlist") },
+                    onClick = {
+                        vm.updateWishlist(book, WishlistStatus.WISH)
+                        menuExpanded = false
+                    }
+                )
+                DropdownMenuItem(
+                    text = { Text("📦 Mark as On the Way") },
+                    onClick = {
+                        vm.updateWishlist(book, WishlistStatus.ON_THE_WAY)
+                        menuExpanded = false
+                    }
+                )
+                DropdownMenuItem(
+                    text = { Text("📚 Mark as Obtained") },
+                    onClick = {
+                        vm.updateWishlist(book, WishlistStatus.OBTAINED)
+                        menuExpanded = false
+                    }
+                )
+
+                if (book.wishlist != null) {
+                    DropdownMenuItem(
+                        text = { Text("❌ Remove from Wishlist") },
+                        onClick = {
+                            vm.updateWishlist(book, null)
+                            menuExpanded = false
+                        }
+                    )
+                }
             }
         }
     }
