@@ -37,9 +37,13 @@ interface BookDao {
     @Query("SELECT * FROM books WHERE saga = :saga ORDER BY title COLLATE NOCASE")
     fun getBooksBySaga(saga: String): Flow<List<Book>>
 
-    // Nueva query para obtener autores únicos
+    // Query para obtener autores únicos
     @Query("SELECT DISTINCT author FROM books WHERE author IS NOT NULL AND author != '' ORDER BY author COLLATE NOCASE")
     fun getUniqueAuthors(): Flow<List<String>>
+
+    // Nueva query para obtener sagas únicas
+    @Query("SELECT DISTINCT saga FROM books WHERE saga IS NOT NULL AND saga != '' ORDER BY saga COLLATE NOCASE")
+    fun getUniqueSagas(): Flow<List<String>>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertAll(items: List<Book>)

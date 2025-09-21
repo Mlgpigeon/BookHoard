@@ -84,13 +84,24 @@ class BooksVm(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    // Nueva función para buscar autores con fuzzy search
+    // Función para buscar autores con fuzzy search
     fun searchAuthorSuggestions(query: String): Flow<List<String>> {
         return if (query.length < 2) {
             flowOf(emptyList())
         } else {
             dao.getUniqueAuthors().map { authors ->
                 FuzzySearchUtils.searchAuthorsSimple(authors, query, threshold = 0.3)
+            }
+        }
+    }
+
+    // Nueva función para buscar sagas con fuzzy search
+    fun searchSagaSuggestions(query: String): Flow<List<String>> {
+        return if (query.length < 2) {
+            flowOf(emptyList())
+        } else {
+            dao.getUniqueSagas().map { sagas ->
+                FuzzySearchUtils.searchAuthorsSimple(sagas, query, threshold = 0.3)
             }
         }
     }
