@@ -13,8 +13,9 @@ data class Book(
     val title: String,
     val author: String? = null,
     val saga: String? = null,
+    val description: String? = null,  // New field for book description
     val status: ReadingStatus = ReadingStatus.NOT_STARTED,
-    val wishlist: WishlistStatus? = null   // 👈 null = no está en wishlist
+    val wishlist: WishlistStatus? = null   // null = no está en wishlist
 )
 
 enum class ReadingStatus {
@@ -28,6 +29,3 @@ enum class WishlistStatus {
     ON_THE_WAY, // ya está en camino
     OBTAINED    // ya lo tengo
 }
-
-
-

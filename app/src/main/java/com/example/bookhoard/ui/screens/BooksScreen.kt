@@ -20,13 +20,15 @@ import androidx.compose.ui.unit.dp
 import com.example.bookhoard.BooksVm
 import com.example.bookhoard.data.Book
 import com.example.bookhoard.data.ReadingStatus
-import com.example.bookhoard.ui.components.BookRow
 import com.example.bookhoard.ui.components.ViewModeSelector
 import com.example.bookhoard.data.WishlistStatus
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun BooksScreen(vm: BooksVm) {
+fun BooksScreen(
+    vm: BooksVm,
+    onBookClick: (Book) -> Unit = {}
+) {
     val filteredBooks by vm.filteredBooks.collectAsState(initial = emptyList())
     val searchQuery by vm.searchQuery.collectAsState()
     var viewMode by remember { mutableStateOf("books") }
@@ -47,7 +49,7 @@ fun BooksScreen(vm: BooksVm) {
 
         // Contenido que se filtra en tiempo real
         if (viewMode == "books") {
-            LiveBooksView(filteredBooks, vm, searchQuery)
+            LiveBooksView(filteredBooks, vm, searchQuery, onBookClick)
         } else {
             LiveAuthorsView(filteredBooks, searchQuery)
         }
@@ -105,7 +107,8 @@ private fun LiveSearchBar(
 private fun LiveBooksView(
     books: List<Book>,
     vm: BooksVm,
-    searchQuery: String
+    searchQuery: String,
+    onBookClick: (Book) -> Unit = {}
 ) {
     val reading = books.filter { it.status == ReadingStatus.READING }
     val unread = books.filter { it.status == ReadingStatus.NOT_STARTED }
@@ -135,7 +138,8 @@ private fun LiveBooksView(
                     books = reading,
                     vm = vm,
                     defaultExpanded = true,
-                    highlight = searchQuery
+                    highlight = searchQuery,
+                    onBookClick = onBookClick
                 )
             }
         }
@@ -149,7 +153,8 @@ private fun LiveBooksView(
                     books = unread,
                     vm = vm,
                     defaultExpanded = searchQuery.isNotEmpty(),
-                    highlight = searchQuery
+                    highlight = searchQuery,
+                    onBookClick = onBookClick
                 )
             }
         }
@@ -163,7 +168,8 @@ private fun LiveBooksView(
                     books = read,
                     vm = vm,
                     defaultExpanded = searchQuery.isNotEmpty(),
-                    highlight = searchQuery
+                    highlight = searchQuery,
+                    onBookClick = onBookClick
                 )
             }
         }
@@ -177,114 +183,6 @@ private fun LiveBooksView(
                     onClearSearch = { vm.clearSearch() }
                 )
             }
-        }
-    }
-}
-
-@Composable
-private fun BooksStatusView(
-    books: List<Book>,
-    vm: BooksVm,
-    searchQuery: String
-) {
-    val total = books.size
-    val reading = books.filter { it.status == ReadingStatus.READING }
-    val unread = books.filter { it.status == ReadingStatus.NOT_STARTED }
-    val read = books.filter { it.status == ReadingStatus.READ }
-
-    // Mostrar estadísticas solo si no hay búsqueda activa
-    if (searchQuery.isBlank()) {
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            Stat("Total", total, Modifier.weight(1f))
-            Stat("Unread", unread.size, Modifier.weight(1f))
-            Stat("Reading", reading.size, Modifier.weight(1f))
-            Stat("Read", read.size, Modifier.weight(1f))
-        }
-        Spacer(Modifier.height(16.dp))
-    } else {
-        // Mostrar resultados de búsqueda
-        Text(
-            text = "Found ${books.size} result${if (books.size != 1) "s" else ""} for \"$searchQuery\"",
-            style = MaterialTheme.typography.bodyMedium,
-            modifier = Modifier.padding(bottom = 16.dp)
-        )
-    }
-
-    LazyColumn(
-        verticalArrangement = Arrangement.spacedBy(8.dp)
-    ) {
-        if (unread.isNotEmpty()) {
-            item { CategorySection("📕 Unread", unread, vm) }
-        }
-        if (reading.isNotEmpty()) {
-            item { CategorySection("📖 Reading", reading, vm) }
-        }
-        if (read.isNotEmpty()) {
-            item { CategorySection("✅ Read", read, vm) }
-        }
-
-        // Mensaje si no hay resultados
-        if (books.isEmpty() && searchQuery.isNotBlank()) {
-            item {
-                Column(
-                    modifier = Modifier.fillMaxWidth().padding(32.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    Text(
-                        text = "No books found",
-                        style = MaterialTheme.typography.titleMedium
-                    )
-                    Text(
-                        text = "Try a different search term",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun CategorySection(title: String, books: List<Book>, vm: BooksVm) {
-    var expanded by remember { mutableStateOf(false) }
-
-    ElevatedCard(Modifier.fillMaxWidth()) {
-        Column(Modifier.fillMaxWidth().padding(8.dp)) {
-            Row(
-                Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Text(
-                    text = "$title (${books.size})",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold
-                )
-                TextButton(onClick = { expanded = !expanded }) {
-                    Text(if (expanded) "Hide" else "Show")
-                }
-            }
-
-            if (expanded) {
-                Spacer(Modifier.height(4.dp))
-                books.forEach { book ->
-                    BookRow(book, vm)
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun Stat(label: String, value: Int, modifier: Modifier = Modifier) {
-    ElevatedCard(modifier) {
-        Column(Modifier.padding(12.dp)) {
-            Text(text = label, style = MaterialTheme.typography.labelMedium)
-            Text(
-                text = "$value",
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold
-            )
         }
     }
 }
@@ -376,7 +274,8 @@ private fun LiveSection(
     books: List<Book>,
     vm: BooksVm,
     defaultExpanded: Boolean = false,
-    highlight: String = ""
+    highlight: String = "",
+    onBookClick: (Book) -> Unit = {}
 ) {
     var expanded by remember { mutableStateOf(defaultExpanded) }
 
@@ -424,7 +323,8 @@ private fun LiveSection(
                         LiveBookRow(
                             book = book,
                             vm = vm,
-                            highlight = highlight
+                            highlight = highlight,
+                            onBookClick = onBookClick
                         )
                     }
                 }
@@ -437,18 +337,24 @@ private fun LiveSection(
 private fun LiveBookRow(
     book: Book,
     vm: BooksVm,
-    highlight: String = ""
+    highlight: String = "",
+    onBookClick: (Book) -> Unit = {}
 ) {
     var menuExpanded by remember { mutableStateOf(false) }
 
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .clickable { onBookClick(book) }
             .padding(vertical = 6.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Column(Modifier.weight(1f)) {
+        Column(
+            Modifier
+                .weight(1f)
+                .clickable { onBookClick(book) }
+        ) {
             Text(
                 text = "• ${book.title}",
                 style = MaterialTheme.typography.bodyLarge,

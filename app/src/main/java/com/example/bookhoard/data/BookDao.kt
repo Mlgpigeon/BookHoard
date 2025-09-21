@@ -8,6 +8,9 @@ interface BookDao {
     @Query("SELECT * FROM books ORDER BY title COLLATE NOCASE")
     fun all(): Flow<List<Book>>
 
+    @Query("SELECT * FROM books WHERE id = :id")
+    fun getBookById(id: Long): Flow<Book?>
+
     @Query("""
         SELECT * FROM books 
         WHERE title LIKE :query 

@@ -16,6 +16,8 @@ import com.example.bookhoard.ui.screens.AddBookScreen
 import com.example.bookhoard.BooksVm
 import com.example.bookhoard.ui.screens.BooksScreen
 import com.example.bookhoard.ui.screens.WishlistScreen
+import com.example.bookhoard.ui.screens.BookDetailScreen
+import com.example.bookhoard.data.Book
 
 class MainActivity : ComponentActivity() {
     private val vm: BooksVm by viewModels()
@@ -31,45 +33,78 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+sealed class Screen {
+    object Books : Screen()
+    object Add : Screen()
+    object Wishlist : Screen()
+    data class BookDetail(val bookId: Long) : Screen()
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MainScreen(vm: BooksVm) {
-    var selectedTab by remember { mutableStateOf("profile") }
+    var currentScreen by remember { mutableStateOf<Screen>(Screen.Books) }
 
-    Scaffold(
-        topBar = {
-            TopAppBar(title = { Text("BookHoard") })
-        },
-        bottomBar = {
-            BottomAppBar {
-                NavigationBar {
-                    NavigationBarItem(
-                        selected = selectedTab == "profile",
-                        onClick = { selectedTab = "profile" },
-                        icon = { Icon(Icons.Default.AccountCircle, contentDescription = "Profile") },
-                        label = { Text("Books") }
-                    )
-                    NavigationBarItem(
-                        selected = selectedTab == "add",
-                        onClick = { selectedTab = "add" },
-                        icon = { Icon(Icons.Default.Add, contentDescription = "Add") },
-                        label = { Text("Add") }
-                    )
-                    NavigationBarItem(
-                        selected = selectedTab == "wishlist",
-                        onClick = { selectedTab = "wishlist" },
-                        icon = { Icon(Icons.Default.Star, contentDescription = "Wishlist") },
-                        label = { Text("Wishlist") }
-                    )
+    // Store current screen value to enable smart cast
+    val screen = currentScreen
+
+    when (screen) {
+        is Screen.BookDetail -> {
+            BookDetailScreen(
+                bookId = screen.bookId,
+                vm = vm,
+                onNavigateBack = { currentScreen = Screen.Books },
+                onEditBook = { book ->
+                    // TODO: Navigate to edit screen when implemented
                 }
-            }
+            )
         }
-    ) { paddings ->
-        Box(Modifier.padding(paddings)) {
-            when (selectedTab) {
-                "profile" -> BooksScreen(vm)
-                "add" -> AddBookScreen(vm)
-                "wishlist" -> WishlistScreen(vm)
+        else -> {
+            Scaffold(
+                topBar = {
+                    TopAppBar(title = { Text("BookHoard") })
+                },
+                bottomBar = {
+                    BottomAppBar {
+                        NavigationBar {
+                            NavigationBarItem(
+                                selected = screen == Screen.Books,
+                                onClick = { currentScreen = Screen.Books },
+                                icon = { Icon(Icons.Default.AccountCircle, contentDescription = "Profile") },
+                                label = { Text("Books") }
+                            )
+                            NavigationBarItem(
+                                selected = screen == Screen.Add,
+                                onClick = { currentScreen = Screen.Add },
+                                icon = { Icon(Icons.Default.Add, contentDescription = "Add") },
+                                label = { Text("Add") }
+                            )
+                            NavigationBarItem(
+                                selected = screen == Screen.Wishlist,
+                                onClick = { currentScreen = Screen.Wishlist },
+                                icon = { Icon(Icons.Default.Star, contentDescription = "Wishlist") },
+                                label = { Text("Wishlist") }
+                            )
+                        }
+                    }
+                }
+            ) { paddings ->
+                Box(Modifier.padding(paddings)) {
+                    when (screen) {
+                        Screen.Books -> BooksScreen(
+                            vm = vm,
+                            onBookClick = { book -> currentScreen = Screen.BookDetail(book.id) }
+                        )
+                        Screen.Add -> AddBookScreen(vm)
+                        Screen.Wishlist -> WishlistScreen(
+                            vm = vm,
+                            onBookClick = { book -> currentScreen = Screen.BookDetail(book.id) }
+                        )
+                        is Screen.BookDetail -> {
+                            // This case is handled above
+                        }
+                    }
+                }
             }
         }
     }

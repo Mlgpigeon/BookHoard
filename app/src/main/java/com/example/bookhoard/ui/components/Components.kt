@@ -49,15 +49,26 @@ fun ViewModeSelector(viewMode: String, onChange: (String) -> Unit) {
 }
 
 @Composable
-fun BookRow(book: Book, vm: BooksVm) {
+fun BookRow(
+    book: Book,
+    vm: BooksVm,
+    onBookClick: (Book) -> Unit = {}
+) {
     var menuExpanded by remember { mutableStateOf(false) }
 
     Row(
-        Modifier.fillMaxWidth().padding(vertical = 4.dp),
+        Modifier
+            .fillMaxWidth()
+            .clickable { onBookClick(book) }
+            .padding(vertical = 4.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Column(Modifier.weight(1f)) {
+        Column(
+            Modifier
+                .weight(1f)
+                .clickable { onBookClick(book) }
+        ) {
             Text("• ${book.title}")
             if (book.author != null) {
                 Text(
@@ -76,7 +87,9 @@ fun BookRow(book: Book, vm: BooksVm) {
         }
 
         Box {
-            IconButton(onClick = { menuExpanded = true }) {
+            IconButton(
+                onClick = { menuExpanded = true }
+            ) {
                 Icon(
                     imageVector = Icons.Default.CheckCircle,
                     contentDescription = "Change status"
@@ -114,15 +127,26 @@ fun BookRow(book: Book, vm: BooksVm) {
 }
 
 @Composable
-fun WishlistRow(book: Book, vm: BooksVm) {
+fun WishlistRow(
+    book: Book,
+    vm: BooksVm,
+    onBookClick: (Book) -> Unit = {}
+) {
     var menuExpanded by remember { mutableStateOf(false) }
 
     Row(
-        Modifier.fillMaxWidth().padding(vertical = 4.dp),
+        Modifier
+            .fillMaxWidth()
+            .clickable { onBookClick(book) }
+            .padding(vertical = 4.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Column(Modifier.weight(1f)) {
+        Column(
+            Modifier
+                .weight(1f)
+                .clickable { onBookClick(book) }
+        ) {
             Text("• ${book.title}")
             if (book.author != null) {
                 Text(

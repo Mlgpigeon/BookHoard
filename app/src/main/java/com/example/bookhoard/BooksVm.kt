@@ -123,7 +123,6 @@ class BooksVm(app: Application) : AndroidViewModel(app) {
         _wishlistSearchQuery.value = ""
     }
 
-
     fun replaceAll(list: List<Book>) {
         viewModelScope.launch {
             dao.clear()
@@ -170,6 +169,7 @@ class BooksVm(app: Application) : AndroidViewModel(app) {
             val readStr = r["Read"]?.trim()?.lowercase().orEmpty()
             val saga = r["Saga"]?.trim().orEmpty().ifBlank { null }
             val author = r["Author"]?.trim().orEmpty().ifBlank { null }
+            val description = r["Description"]?.trim().orEmpty().ifBlank { null }
 
             val status = when (readStr) {
                 "leyendo", "reading" -> ReadingStatus.READING
@@ -190,6 +190,7 @@ class BooksVm(app: Application) : AndroidViewModel(app) {
                 title = title,
                 author = author,
                 saga = saga,
+                description = description,
                 status = status,
                 wishlist = wishlistStatus
             )
@@ -210,6 +211,12 @@ class BooksVm(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    fun updateBook(book: Book) {
+        viewModelScope.launch {
+            dao.upsertAll(listOf(book))
+        }
+    }
+
     fun deleteBook(book: Book) {
         viewModelScope.launch {
             dao.delete(book)
@@ -222,5 +229,9 @@ class BooksVm(app: Application) : AndroidViewModel(app) {
         } else {
             dao.searchBooks("%$query%")
         }
+    }
+
+    fun getBookById(id: Long): Flow<Book?> {
+        return dao.getBookById(id)
     }
 }

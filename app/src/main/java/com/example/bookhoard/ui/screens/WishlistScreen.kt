@@ -24,12 +24,13 @@ import androidx.compose.ui.unit.dp
 import com.example.bookhoard.BooksVm
 import com.example.bookhoard.data.Book
 import com.example.bookhoard.data.WishlistStatus
-import com.example.bookhoard.ui.components.AuthorsView
 import com.example.bookhoard.ui.components.ViewModeSelector
-import com.example.bookhoard.ui.components.WishlistRow
 
 @Composable
-fun WishlistScreen(vm: BooksVm) {
+fun WishlistScreen(
+    vm: BooksVm,
+    onBookClick: (Book) -> Unit = {}
+) {
     val filteredBooks by vm.filteredWishlistBooks.collectAsState(initial = emptyList())
     val searchQuery by vm.wishlistSearchQuery.collectAsState()
     var viewMode by remember { mutableStateOf("books") }
@@ -50,7 +51,7 @@ fun WishlistScreen(vm: BooksVm) {
 
         // Contenido que se filtra en tiempo real
         if (viewMode == "books") {
-            LiveWishlistView(filteredBooks, vm, searchQuery)
+            LiveWishlistView(filteredBooks, vm, searchQuery, onBookClick)
         } else {
             LiveWishlistAuthorsView(filteredBooks, searchQuery)
         }
@@ -108,7 +109,8 @@ private fun LiveSearchBar(
 private fun LiveWishlistView(
     books: List<Book>,
     vm: BooksVm,
-    searchQuery: String
+    searchQuery: String,
+    onBookClick: (Book) -> Unit = {}
 ) {
     val wish = books.filter { it.wishlist == WishlistStatus.WISH }
     val onTheWay = books.filter { it.wishlist == WishlistStatus.ON_THE_WAY }
@@ -136,7 +138,8 @@ private fun LiveWishlistView(
                     books = onTheWay,
                     vm = vm,
                     defaultExpanded = true,
-                    highlight = searchQuery
+                    highlight = searchQuery,
+                    onBookClick = onBookClick
                 )
             }
         }
@@ -150,7 +153,8 @@ private fun LiveWishlistView(
                     books = wish,
                     vm = vm,
                     defaultExpanded = searchQuery.isNotEmpty(),
-                    highlight = searchQuery
+                    highlight = searchQuery,
+                    onBookClick = onBookClick
                 )
             }
         }
@@ -277,7 +281,8 @@ private fun LiveWishlistSection(
     books: List<Book>,
     vm: BooksVm,
     defaultExpanded: Boolean = false,
-    highlight: String = ""
+    highlight: String = "",
+    onBookClick: (Book) -> Unit = {}
 ) {
     var expanded by remember { mutableStateOf(defaultExpanded) }
 
@@ -326,7 +331,8 @@ private fun LiveWishlistSection(
                         LiveWishlistRow(
                             book = book,
                             vm = vm,
-                            highlight = highlight
+                            highlight = highlight,
+                            onBookClick = onBookClick
                         )
                     }
                 }
@@ -339,18 +345,24 @@ private fun LiveWishlistSection(
 private fun LiveWishlistRow(
     book: Book,
     vm: BooksVm,
-    highlight: String = ""
+    highlight: String = "",
+    onBookClick: (Book) -> Unit = {}
 ) {
     var menuExpanded by remember { mutableStateOf(false) }
 
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .clickable { onBookClick(book) }
             .padding(vertical = 6.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Column(Modifier.weight(1f)) {
+        Column(
+            Modifier
+                .weight(1f)
+                .clickable { onBookClick(book) }
+        ) {
             // Título con highlighting
             Text(
                 text = "• ${book.title}",
@@ -676,155 +688,6 @@ private fun LiveAuthorRow(
                     )
                 }
                 Spacer(Modifier.height(4.dp))
-            }
-        }
-    }
-}
-
-@Composable
-private fun WishlistStatusView(
-    books: List<Book>,
-    vm: BooksVm,
-    searchQuery: String
-) {
-    val wish = books.filter { it.wishlist == WishlistStatus.WISH }
-    val onTheWay = books.filter { it.wishlist == WishlistStatus.ON_THE_WAY }
-
-    // Mostrar información de búsqueda si hay query activo
-    if (searchQuery.isNotBlank()) {
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            colors = CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.3f)
-            )
-        ) {
-            Row(
-                modifier = Modifier.padding(16.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Icon(
-                    Icons.Default.Star,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.secondary
-                )
-                Spacer(Modifier.width(8.dp))
-                Column {
-                    Text(
-                        text = "Encontrados ${books.size} resultado${if (books.size != 1) "s" else ""} en wishlist",
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Text(
-                        text = "Búsqueda: \"$searchQuery\" (tolerante a erratas)",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            }
-        }
-        Spacer(Modifier.height(16.dp))
-    }
-
-    LazyColumn(
-        verticalArrangement = Arrangement.spacedBy(8.dp)
-    ) {
-        if (wish.isNotEmpty()) {
-            item {
-                WishlistSection("⭐ Wish", wish, vm)
-            }
-        }
-        if (onTheWay.isNotEmpty()) {
-            item {
-                WishlistSection("📦 On the way", onTheWay, vm)
-            }
-        }
-
-        // Mensaje si no hay resultados
-        if (books.isEmpty()) {
-            item {
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceVariant
-                    )
-                ) {
-                    Column(
-                        modifier = Modifier.fillMaxWidth().padding(32.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        Icon(
-                            if (searchQuery.isNotBlank()) Icons.Default.Search else Icons.Default.Star,
-                            contentDescription = null,
-                            modifier = Modifier.size(48.dp),
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        Spacer(Modifier.height(16.dp))
-
-                        if (searchQuery.isNotBlank()) {
-                            Text(
-                                text = "No se encontraron libros en wishlist",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold
-                            )
-                            Spacer(Modifier.height(8.dp))
-                            Text(
-                                text = "Prueba con otros términos. La búsqueda es tolerante a erratas y acentos.",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                textAlign = androidx.compose.ui.text.style.TextAlign.Center
-                            )
-                            Spacer(Modifier.height(16.dp))
-                            OutlinedButton(
-                                onClick = { vm.clearWishlistSearch() }
-                            ) {
-                                Text("Limpiar búsqueda")
-                            }
-                        } else {
-                            Text(
-                                text = "Tu wishlist está vacía",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold
-                            )
-                            Spacer(Modifier.height(8.dp))
-                            Text(
-                                text = "Añade libros que quieras leer a tu lista de deseos",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                textAlign = androidx.compose.ui.text.style.TextAlign.Center
-                            )
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun WishlistSection(title: String, books: List<Book>, vm: BooksVm) {
-    var expanded by remember { mutableStateOf(true) }
-
-    ElevatedCard(Modifier.fillMaxWidth()) {
-        Column(Modifier.fillMaxWidth().padding(8.dp)) {
-            Row(
-                Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Text(
-                    text = "$title (${books.size})",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold
-                )
-                TextButton(onClick = { expanded = !expanded }) {
-                    Text(if (expanded) "Hide" else "Show")
-                }
-            }
-
-            if (expanded) {
-                Spacer(Modifier.height(4.dp))
-                books.forEach { book ->
-                    WishlistRow(book, vm)
-                }
             }
         }
     }
