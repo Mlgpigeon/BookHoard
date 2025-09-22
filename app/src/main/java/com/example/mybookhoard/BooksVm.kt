@@ -4,33 +4,28 @@ import android.app.Application
 import android.content.Context
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.mybookhoard.api.*
 import com.example.mybookhoard.data.*
-import com.example.mybookhoard.sync.SimplifiedGoogleDriveSync
+import com.example.mybookhoard.repository.BookRepository
 import com.example.mybookhoard.utils.FuzzySearchUtils
 import com.github.doyaaaaaken.kotlincsv.dsl.csvReader
 import kotlinx.coroutines.FlowPreview
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.debounce
-import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.firstOrNull
-import kotlinx.coroutines.flow.flowOf
-import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 
 @OptIn(FlowPreview::class)
 class BooksVm(app: Application) : AndroidViewModel(app) {
-    private val dao = AppDb.get(app).bookDao()
 
-    // 🆕 Google Drive sync service (disponible tras configurar google-services.json)
-    val googleDriveSync = SimplifiedGoogleDriveSync(app)
+    private val repository = BookRepository(app)
 
-    // Estado original de todos los libros
-    val items: Flow<List<Book>> = dao.all()
+    // Authentication state
+    val authState: StateFlow<AuthState> = repository.authState
+    val connectionState: StateFlow<ConnectionState> = repository.connectionState
 
-    // Estados para búsqueda con debouncing automático
+    // All books from repository
+    val items: Flow<List<Book>> = repository.getAllBooks()
+
+    // Search states with debouncing
     private val _searchQuery = MutableStateFlow("")
     val searchQuery: StateFlow<String> = _searchQuery
 
@@ -46,7 +41,7 @@ class BooksVm(app: Application) : AndroidViewModel(app) {
         .debounce(300)
         .distinctUntilChanged()
 
-    // Libros filtrados por búsqueda normal (con debouncing)
+    // Filtered books using repository search
     val filteredBooks: Flow<List<Book>> = combine(items, debouncedSearchQuery) { books, query ->
         if (query.isBlank()) {
             books
@@ -55,30 +50,49 @@ class BooksVm(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    // Libros de wishlist filtrados por búsqueda (con debouncing)
-    val filteredWishlistBooks: Flow<List<Book>> = combine(items, debouncedWishlistSearchQuery) { books, query ->
-        val wishlistBooks = books.filter {
-            it.wishlist == WishlistStatus.WISH || it.wishlist == WishlistStatus.ON_THE_WAY
-        }
-
+    // Wishlist books with search
+    val filteredWishlistBooks: Flow<List<Book>> = combine(
+        repository.getWishlistBooks(),
+        debouncedWishlistSearchQuery
+    ) { books, query ->
         if (query.isBlank()) {
-            wishlistBooks
+            books
         } else {
-            FuzzySearchUtils.searchBooksSimple(wishlistBooks, query, threshold = 0.25)
+            FuzzySearchUtils.searchBooksSimple(books, query, threshold = 0.25)
         }
     }
 
-    // Sugerencias de búsqueda (también con debouncing)
+    // Authentication methods
+    fun login(identifier: String, password: String) {
+        viewModelScope.launch {
+            repository.login(identifier, password)
+        }
+    }
+
+    fun register(username: String, email: String, password: String) {
+        viewModelScope.launch {
+            repository.register(username, email, password)
+        }
+    }
+
+    fun logout() {
+        viewModelScope.launch {
+            repository.logout()
+        }
+    }
+
+    fun getProfile() {
+        viewModelScope.launch {
+            repository.getProfile()
+        }
+    }
+
+    // Search suggestions
     fun getSearchSuggestions(query: String, isWishlist: Boolean = false): Flow<List<String>> {
         return if (isWishlist) {
-            combine(items, debouncedWishlistSearchQuery) { books, _ ->
+            combine(repository.getWishlistBooks(), debouncedWishlistSearchQuery) { books, _ ->
                 if (query.length < 2) emptyList()
-                else {
-                    val wishlistBooks = books.filter {
-                        it.wishlist == WishlistStatus.WISH || it.wishlist == WishlistStatus.ON_THE_WAY
-                    }
-                    FuzzySearchUtils.generateSearchSuggestions(wishlistBooks, query)
-                }
+                else FuzzySearchUtils.generateSearchSuggestions(books, query)
             }
         } else {
             combine(items, debouncedSearchQuery) { books, _ ->
@@ -88,29 +102,27 @@ class BooksVm(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    // Función para buscar autores con fuzzy search
     fun searchAuthorSuggestions(query: String): Flow<List<String>> {
         return if (query.length < 2) {
             flowOf(emptyList())
         } else {
-            dao.getUniqueAuthors().map { authors ->
+            repository.getUniqueAuthors().map { authors ->
                 FuzzySearchUtils.searchAuthorsSimple(authors, query, threshold = 0.3)
             }
         }
     }
 
-    // Nueva función para buscar sagas con fuzzy search
     fun searchSagaSuggestions(query: String): Flow<List<String>> {
         return if (query.length < 2) {
             flowOf(emptyList())
         } else {
-            dao.getUniqueSagas().map { sagas ->
+            repository.getUniqueSagas().map { sagas ->
                 FuzzySearchUtils.searchAuthorsSimple(sagas, query, threshold = 0.3)
             }
         }
     }
 
-    // Métodos para actualizar queries (instantáneos en UI, pero debounced en filtrado)
+    // Search query updates
     fun updateSearchQuery(query: String) {
         _searchQuery.value = query
     }
@@ -127,38 +139,82 @@ class BooksVm(app: Application) : AndroidViewModel(app) {
         _wishlistSearchQuery.value = ""
     }
 
-    fun replaceAll(list: List<Book>) {
-        viewModelScope.launch {
-            dao.clear()
-            dao.upsertAll(list)
-        }
-    }
-
+    // Book operations
     fun addBook(book: Book) {
         viewModelScope.launch {
-            dao.upsertAll(listOf(book))
+            repository.addBook(book)
         }
     }
 
     fun addBooks(books: List<Book>) {
         viewModelScope.launch {
-            dao.upsertAll(books)
+            books.forEach { repository.addBook(it) }
         }
     }
 
-    /** Importa el CSV de assets solo si la DB está vacía */
+    fun updateBook(book: Book) {
+        viewModelScope.launch {
+            repository.updateBook(book)
+        }
+    }
+
+    fun deleteBook(book: Book) {
+        viewModelScope.launch {
+            repository.deleteBook(book)
+        }
+    }
+
+    fun updateStatus(book: Book, status: ReadingStatus) {
+        val updated = book.copy(status = status)
+        updateBook(updated)
+    }
+
+    fun updateWishlist(book: Book, status: WishlistStatus?) {
+        val updated = book.copy(wishlist = status)
+        updateBook(updated)
+    }
+
+    fun getBookById(id: Long): Flow<Book?> {
+        return repository.getBookById(id)
+    }
+
+    // Bulk operations
+    fun replaceAll(list: List<Book>) {
+        viewModelScope.launch {
+            repository.replaceAllBooks(list)
+        }
+    }
+
+    // Import from assets (only for first run or offline mode)
     fun importFromAssetsOnce(ctx: Context) {
         viewModelScope.launch {
-            val current = dao.all().firstOrNull() ?: emptyList()
-            if (current.isEmpty()) {
-                val csv = ctx.assets.open("libros_iniciales.csv")
-                    .bufferedReader().use { it.readText() }
-                val books = parseCsv(csv)
-                dao.upsertAll(books)
+            // Only import if not authenticated and no local data
+            if (authState.value !is AuthState.Authenticated) {
+                val current = items.firstOrNull() ?: emptyList()
+                if (current.isEmpty()) {
+                    val csv = ctx.assets.open("libros_iniciales.csv")
+                        .bufferedReader().use { it.readText() }
+                    val books = parseCsv(csv)
+                    repository.replaceAllBooks(books)
+                }
             }
         }
     }
 
+    // Sync operations
+    fun syncFromServer() {
+        viewModelScope.launch {
+            repository.syncFromServer()
+        }
+    }
+
+    fun syncToServer() {
+        viewModelScope.launch {
+            repository.syncToServer()
+        }
+    }
+
+    // CSV parsing (kept for local imports)
     private fun parseCsv(csv: String): List<Book> {
         val reader = csvReader {
             skipEmptyLine = true
@@ -181,7 +237,6 @@ class BooksVm(app: Application) : AndroidViewModel(app) {
                 else -> ReadingStatus.NOT_STARTED
             }
 
-            // Parse wishlist status from CSV
             val wishlistStr = r["Wishlist"]?.trim()?.uppercase().orEmpty()
             val wishlistStatus = when (wishlistStr) {
                 "WISH" -> WishlistStatus.WISH
@@ -201,65 +256,21 @@ class BooksVm(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    fun updateStatus(book: Book, status: ReadingStatus) {
-        viewModelScope.launch {
-            val updated = book.copy(status = status)
-            dao.upsertAll(listOf(updated))
-        }
-    }
+    // Connection status helpers
+    fun isOnline(): Boolean = connectionState.value is ConnectionState.Online
+    fun isOffline(): Boolean = connectionState.value is ConnectionState.Offline
+    fun isSyncing(): Boolean = connectionState.value is ConnectionState.Syncing
+    fun hasConnectionError(): Boolean = connectionState.value is ConnectionState.Error
 
-    fun updateWishlist(book: Book, status: WishlistStatus?) {
-        viewModelScope.launch {
-            val updated = book.copy(wishlist = status)
-            dao.upsertAll(listOf(updated))
-        }
-    }
+    // Auth status helpers
+    fun isAuthenticated(): Boolean = authState.value is AuthState.Authenticated
+    fun isAuthenticating(): Boolean = authState.value is AuthState.Authenticating
+    fun hasAuthError(): Boolean = authState.value is AuthState.Error
 
-    fun updateBook(book: Book) {
-        viewModelScope.launch {
-            dao.upsertAll(listOf(book))
-        }
-    }
-
-    fun deleteBook(book: Book) {
-        viewModelScope.launch {
-            dao.delete(book)
-        }
-    }
-
-    fun searchBooks(query: String): Flow<List<Book>> {
-        return if (query.isBlank()) {
-            dao.all()
-        } else {
-            dao.searchBooks("%$query%")
-        }
-    }
-
-    fun getBookById(id: Long): Flow<Book?> {
-        return dao.getBookById(id)
-    }
-
-    // 🆕 Sync methods (disponibles tras configurar Google Services)
-
-    fun uploadToCloud() {
-        viewModelScope.launch {
-            val books = items.firstOrNull() ?: emptyList()
-            googleDriveSync.uploadBooks(books)
-        }
-    }
-
-    fun downloadFromCloud() {
-        viewModelScope.launch {
-            val books = googleDriveSync.downloadBooks()
-            if (books != null) {
-                replaceAll(books)
-            }
-        }
-    }
-
-    fun signOutFromCloud() {
-        viewModelScope.launch {
-            googleDriveSync.signOut()
+    fun getCurrentUser(): User? {
+        return when (val state = authState.value) {
+            is AuthState.Authenticated -> state.user
+            else -> null
         }
     }
 }

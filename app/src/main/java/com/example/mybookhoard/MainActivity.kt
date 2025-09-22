@@ -8,28 +8,82 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.CloudSync
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import com.example.mybookhoard.ui.screens.AddBookScreen
-import com.example.mybookhoard.ui.screens.BooksScreen
-import com.example.mybookhoard.ui.screens.WishlistScreen
-import com.example.mybookhoard.ui.screens.BookDetailScreen
-import com.example.mybookhoard.ui.screens.EditBookScreen
-import com.example.mybookhoard.ui.screens.SyncScreen
+import androidx.compose.ui.unit.dp
+import com.example.mybookhoard.api.AuthState
+import com.example.mybookhoard.api.ConnectionState
+import com.example.mybookhoard.ui.screens.*
 
 class MainActivity : ComponentActivity() {
     private val vm: BooksVm by viewModels()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        // Import initial data only if not authenticated
         vm.importFromAssetsOnce(this)
+
         setContent {
             MaterialTheme {
-                MainScreen(vm)
+                AppContent(vm)
             }
+        }
+    }
+}
+
+@Composable
+fun AppContent(vm: BooksVm) {
+    val authState by vm.authState.collectAsState()
+    val connectionState by vm.connectionState.collectAsState()
+
+    // Create local variable for smart cast
+    val currentAuthState = authState
+
+    when (currentAuthState) {
+        is AuthState.NotAuthenticated, is AuthState.Error -> {
+            AuthScreen(
+                authState = currentAuthState,
+                onLogin = { identifier, password ->
+                    vm.login(identifier, password)
+                },
+                onRegister = { username, email, password ->
+                    vm.register(username, email, password)
+                }
+            )
+        }
+
+        is AuthState.Authenticating -> {
+            LoadingScreen(message = "Signing in...")
+        }
+
+        is AuthState.Authenticated -> {
+            MainAppScreen(vm, currentAuthState, connectionState)
+        }
+    }
+}
+
+@Composable
+fun LoadingScreen(message: String = "Loading...") {
+    Box(
+        modifier = Modifier.fillMaxSize(),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            CircularProgressIndicator(
+                modifier = Modifier.size(48.dp)
+            )
+            Text(
+                text = message,
+                style = MaterialTheme.typography.bodyLarge
+            )
         }
     }
 }
@@ -39,13 +93,18 @@ sealed class Screen {
     object Add : Screen()
     object Wishlist : Screen()
     object Sync : Screen()
+    object Profile : Screen()
     data class BookDetail(val bookId: Long) : Screen()
     data class EditBook(val bookId: Long) : Screen()
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun MainScreen(vm: BooksVm) {
+fun MainAppScreen(
+    vm: BooksVm,
+    authState: AuthState.Authenticated,
+    connectionState: ConnectionState
+) {
     var currentScreen by remember { mutableStateOf<Screen>(Screen.Books) }
 
     // Store current screen value to enable smart cast
@@ -72,7 +131,13 @@ fun MainScreen(vm: BooksVm) {
         else -> {
             Scaffold(
                 topBar = {
-                    TopAppBar(title = { Text("BookHoard") })
+                    TopAppBar(
+                        title = { Text("BookHoard") },
+                        actions = {
+                            // Connection status indicator
+                            ConnectionIndicator(connectionState)
+                        }
+                    )
                 },
                 bottomBar = {
                     BottomAppBar {
@@ -117,15 +182,63 @@ fun MainScreen(vm: BooksVm) {
                             onBookClick = { book -> currentScreen = Screen.BookDetail(book.id) }
                         )
                         Screen.Sync -> {
-                            SyncScreen(vm = vm, googleDriveSync = vm.googleDriveSync)
+                            CloudSyncScreen(
+                                vm = vm,
+                                authState = authState,
+                                connectionState = connectionState
+                            )
                         }
 
                         is Screen.BookDetail, is Screen.EditBook -> {
                             // These cases are handled above
                         }
+
+                        Screen.Profile -> {
+                            ProfileScreen(
+                                vm = vm,
+                                user = authState.user,
+                                onNavigateBack = { currentScreen = Screen.Books }
+                            )
+                        }
                     }
                 }
             }
+        }
+    }
+}
+
+@Composable
+fun ConnectionIndicator(connectionState: ConnectionState) {
+    when (connectionState) {
+        is ConnectionState.Online -> {
+            Icon(
+                Icons.Default.CloudSync,
+                contentDescription = "Online",
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(20.dp)
+            )
+        }
+        is ConnectionState.Offline -> {
+            Icon(
+                Icons.Default.CloudSync,
+                contentDescription = "Offline",
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(20.dp)
+            )
+        }
+        is ConnectionState.Syncing -> {
+            CircularProgressIndicator(
+                modifier = Modifier.size(20.dp),
+                strokeWidth = 2.dp
+            )
+        }
+        is ConnectionState.Error -> {
+            Icon(
+                Icons.Default.CloudSync,
+                contentDescription = "Sync Error",
+                tint = MaterialTheme.colorScheme.error,
+                modifier = Modifier.size(20.dp)
+            )
         }
     }
 }
