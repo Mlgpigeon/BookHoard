@@ -10,6 +10,7 @@ import androidx.compose.material.icons.filled.MenuBook
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CloudSync
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -111,8 +112,9 @@ sealed class Screen {
     object Library : Screen()
     object Add : Screen()
     object Sync : Screen()
+    object Search : Screen()  // NUEVA PANTALLA DE BÚSQUEDA
     object Profile : Screen()
-    object Settings : Screen()  // AÑADIR ESTA LÍNEA
+    object Settings : Screen()
     data class BookDetail(val bookId: Long) : Screen()
     data class EditBook(val bookId: Long) : Screen()
 }
@@ -176,7 +178,13 @@ fun MainAppScreen(
                                 icon = { Icon(Icons.Filled.Add, contentDescription = "Add") },
                                 label = { Text("Add") }
                             )
-                            // CAMBIAR: Reemplazar Sync por Profile
+                            // NUEVA: Búsqueda en navegación inferior (como Instagram)
+                            NavigationBarItem(
+                                selected = screen == Screen.Search,
+                                onClick = { currentScreen = Screen.Search },
+                                icon = { Icon(Icons.Filled.Search, contentDescription = "Search") },
+                                label = { Text("Search") }
+                            )
                             NavigationBarItem(
                                 selected = screen == Screen.Profile,
                                 onClick = { currentScreen = Screen.Profile },
@@ -194,6 +202,11 @@ fun MainAppScreen(
                             onBookClick = { book -> currentScreen = Screen.BookDetail(book.id) }
                         )
                         Screen.Add -> AddBookScreen(vm)
+                        Screen.Search -> SearchScreen(
+                            vm = vm,
+                            onNavigateBack = { currentScreen = Screen.Library },
+                            onBookClick = { book -> currentScreen = Screen.BookDetail(book.id) }
+                        )
                         Screen.Sync -> {
                             CloudSyncScreen(
                                 vm = vm,
@@ -275,4 +288,3 @@ fun ConnectionIndicator(
         }
     }
 }
-
