@@ -96,6 +96,35 @@ class BooksVm(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    fun addGoogleBook(
+        title: String,
+        author: String? = null,
+        saga: String? = null,
+        description: String? = null,
+        wishlistStatus: WishlistStatus
+    ) {
+        viewModelScope.launch {
+            try {
+                Log.d(TAG, "Adding Google Book: $title with wishlist status: ${wishlistStatus.name}")
+
+                val result = repository.addGoogleBook(title, author, saga, description, wishlistStatus)
+                when (result) {
+                    is ApiResult.Success -> {
+                        Log.d(TAG, "Google Book added successfully: $title")
+                        // The book will automatically appear in the UI through the repository flow
+                    }
+                    is ApiResult.Error -> {
+                        Log.e(TAG, "Failed to add Google Book: ${result.message}")
+                        // TODO: Show error message to user
+                    }
+                }
+
+            } catch (e: Exception) {
+                Log.e(TAG, "Error adding Google Book '$title': ${e.message}", e)
+            }
+        }
+    }
+
     fun addBooks(books: List<Book>) {
         viewModelScope.launch {
             try {

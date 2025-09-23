@@ -504,6 +504,23 @@ class BookRepository(private val context: Context) {
         }
     }
 
+    suspend fun addGoogleBook(
+        title: String,
+        author: String? = null,
+        saga: String? = null,
+        description: String? = null,
+        wishlistStatus: WishlistStatus
+    ): ApiResult<Book> {
+        val result = apiService.addGoogleBook(title, author, saga, description, wishlistStatus)
+
+        if (result is ApiResult.Success) {
+            // Add to local database
+            localDao.upsertAll(listOf(result.data))
+        }
+
+        return result
+    }
+
     private fun isAuthenticated(): Boolean {
         return _authState.value is AuthState.Authenticated
     }

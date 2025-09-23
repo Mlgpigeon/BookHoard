@@ -3,6 +3,8 @@ package com.example.mybookhoard.api
 import android.content.Context
 import android.content.SharedPreferences
 import android.util.Log
+import com.example.mybookhoard.data.Book
+import com.example.mybookhoard.data.WishlistStatus
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
@@ -419,6 +421,43 @@ class ApiService(private val context: Context) {
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to parse search results: ${e.message}")
                 ApiResult.Error("Failed to parse search results: ${e.message}")
+            }
+        } else {
+            ApiResult.Error(parseError(response.body))
+        }
+    }
+
+    // Add this method to app/src/main/java/com/example/mybookhoard/api/ApiService.kt
+// Insert after the searchBooksWithGoogleBooks method
+// Make sure the class already has: companion object { private const val TAG = "ApiService" }
+
+    suspend fun addGoogleBook(
+        title: String,
+        author: String? = null,
+        saga: String? = null,
+        description: String? = null,
+        wishlistStatus: WishlistStatus
+    ): ApiResult<Book> {
+        val body = JSONObject().apply {
+            put("title", title)
+            put("source", "google_books_api")
+            author?.let { put("author", it) }
+            saga?.let { put("saga", it) }
+            description?.let { put("description", it) }
+            put("status", "NOT_STARTED")
+            put("wishlist", wishlistStatus.name)
+        }
+
+        val response = makeRequest("books/add-google-book", "POST", body)
+        return if (response.isSuccessful()) {
+            try {
+                val json = JSONObject(response.body)
+                val bookData = json.getJSONObject("data").getJSONObject("book")
+                val apiBook = ApiBook.fromJson(bookData)
+                ApiResult.Success(apiBook.toLocalBook())
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to parse created book: ${e.message}")
+                ApiResult.Error("Failed to parse created book: ${e.message}")
             }
         } else {
             ApiResult.Error(parseError(response.body))

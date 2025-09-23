@@ -1,4 +1,4 @@
-// Replace app/src/main/java/com/example/mybookhoard/ui/components/SearchResults.kt
+// Replace the entire app/src/main/java/com/example/mybookhoard/ui/components/SearchResults.kt
 
 package com.example.mybookhoard.ui.components
 
@@ -33,6 +33,10 @@ fun SearchResults(
     val isSearchingGoogle by vm.searchVm.isSearchingGoogle.collectAsState()
     val searchError by vm.searchVm.searchError.collectAsState()
 
+    // State for Google Book Add Dialog
+    var showAddDialog by remember { mutableStateOf(false) }
+    var selectedGoogleBook by remember { mutableStateOf<SearchResult?>(null) }
+
     // Trigger Google Books search when query changes
     LaunchedEffect(searchQuery) {
         if (searchQuery.isNotBlank()) {
@@ -52,12 +56,12 @@ fun SearchResults(
             isLoading = isSearchingGoogle
         )
 
-        // Error message if any
+        // Error display
         searchError?.let { error ->
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                    .padding(16.dp),
                 colors = CardDefaults.cardColors(
                     containerColor = MaterialTheme.colorScheme.errorContainer
                 )
@@ -69,44 +73,40 @@ fun SearchResults(
                     Icon(
                         Icons.Default.Warning,
                         contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onErrorContainer
+                        tint = MaterialTheme.colorScheme.error
                     )
                     Spacer(Modifier.width(8.dp))
                     Text(
                         text = error,
-                        color = MaterialTheme.colorScheme.onErrorContainer,
-                        style = MaterialTheme.typography.bodyMedium
+                        color = MaterialTheme.colorScheme.onErrorContainer
                     )
                 }
             }
         }
 
-        if (combinedResults == null && searchQuery.isBlank()) {
-            EmptySearchState()
-        } else if (combinedResults?.totalResults == 0) {
-            NoResultsFound(searchQuery = searchQuery)
-        } else {
-            combinedResults?.let { results ->
-                LazyColumn(
-                    modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    // Local results section
-                    if (results.localResults.isNotEmpty()) {
-                        item {
-                            CategoryHeader(
-                                title = "Your Library",
-                                subtitle = "${results.localResults.size} book${if (results.localResults.size != 1) "s" else ""}",
-                                icon = Icons.Default.MenuBook
-                            )
-                        }
-                        items(results.localResults) { searchResult ->
-                            SearchResultCard(
+        // Results content
+        val results = combinedResults
+        if (results != null) {
+            LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+                contentPadding = PaddingValues(16.dp)
+            ) {
+                // Local results section
+                if (results.localResults.isNotEmpty()) {
+                    item {
+                        CategoryHeader(
+                            title = "Your Library",
+                            subtitle = "${results.localResults.size} result${if (results.localResults.size != 1) "s" else ""}",
+                            icon = Icons.Default.BookmarkBorder
+                        )
+                    }
+                    items(results.localResults) { searchResult ->
+                        if (searchResult.id != null) {
+                            LocalBookCard(
                                 searchResult = searchResult,
                                 searchQuery = searchQuery,
-                                onClick = {
-                                    // Convert SearchResult back to Book for onClick
+                                onBookClick = {
                                     val book = searchResult.toApiBook().toLocalBook()
                                     onBookClick(book)
                                 },
@@ -114,30 +114,57 @@ fun SearchResults(
                             )
                         }
                     }
+                }
 
-                    // Google Books results section
-                    if (results.googleResults.isNotEmpty()) {
-                        item {
-                            Spacer(Modifier.height(8.dp))
-                            CategoryHeader(
-                                title = "Google Books",
-                                subtitle = "${results.googleResults.size} result${if (results.googleResults.size != 1) "s" else ""}",
-                                icon = Icons.Default.CloudSync
-                            )
-                        }
-                        items(results.googleResults) { searchResult ->
-                            GoogleBookCard(
-                                searchResult = searchResult,
-                                searchQuery = searchQuery,
-                                onAddToLibrary = { book ->
-                                    // TODO: Implement add to library functionality
-                                }
-                            )
-                        }
+                // Google Books results section
+                if (results.googleResults.isNotEmpty()) {
+                    item {
+                        Spacer(Modifier.height(8.dp))
+                        CategoryHeader(
+                            title = "Google Books",
+                            subtitle = "${results.googleResults.size} result${if (results.googleResults.size != 1) "s" else ""}",
+                            icon = Icons.Default.CloudSync
+                        )
+                    }
+                    items(results.googleResults) { searchResult ->
+                        GoogleBookCard(
+                            searchResult = searchResult,
+                            searchQuery = searchQuery,
+                            onAddToLibrary = { googleBook ->
+                                selectedGoogleBook = googleBook
+                                showAddDialog = true
+                            }
+                        )
                     }
                 }
             }
+        } else if (searchQuery.isNotBlank() && !isSearchingGoogle) {
+            EmptySearchState()
         }
+    }
+
+    // Google Book Add Dialog
+    if (showAddDialog && selectedGoogleBook != null) {
+        GoogleBookAddDialog(
+            book = selectedGoogleBook!!.toApiBook().toLocalBook(),
+            onDismiss = {
+                showAddDialog = false
+                selectedGoogleBook = null
+            },
+            onConfirm = { wishlistStatus ->
+                selectedGoogleBook?.let { googleBook ->
+                    vm.addGoogleBook(
+                        title = googleBook.title,
+                        author = googleBook.author,
+                        saga = googleBook.saga,
+                        description = googleBook.description,
+                        wishlistStatus = wishlistStatus
+                    )
+                }
+                showAddDialog = false
+                selectedGoogleBook = null
+            }
+        )
     }
 }
 
@@ -181,24 +208,30 @@ private fun SearchResultsHeader(
                     )
                 }
             }
-            Text(
-                text = "for \"$searchQuery\"",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+
+            if (searchQuery.isNotBlank()) {
+                Text(
+                    text = "for \"$searchQuery\"",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 4.dp)
+                )
+            }
+
             if (localCount > 0 || googleCount > 0) {
-                Spacer(Modifier.height(8.dp))
-                Row {
+                Row(
+                    modifier = Modifier.padding(top = 8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
                     if (localCount > 0) {
-                        SourceChip(
-                            text = "$localCount Your Library",
+                        StatusChip(
+                            text = "$localCount in your library",
                             color = MaterialTheme.colorScheme.primary
                         )
                     }
                     if (googleCount > 0) {
-                        if (localCount > 0) Spacer(Modifier.width(8.dp))
-                        SourceChip(
-                            text = "$googleCount Google Books",
+                        StatusChip(
+                            text = "$googleCount from Google Books",
                             color = MaterialTheme.colorScheme.secondary
                         )
                     }
@@ -223,14 +256,14 @@ private fun CategoryHeader(
         Icon(
             icon,
             contentDescription = null,
-            tint = MaterialTheme.colorScheme.secondary,
+            tint = MaterialTheme.colorScheme.primary,
             modifier = Modifier.size(20.dp)
         )
         Spacer(Modifier.width(8.dp))
         Column {
             Text(
                 text = title,
-                style = MaterialTheme.typography.titleSmall,
+                style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.onSurface
             )
@@ -240,28 +273,20 @@ private fun CategoryHeader(
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
-        Spacer(Modifier.weight(1f))
-        HorizontalDivider(
-            modifier = Modifier.width(60.dp),
-            color = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)
-        )
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun SearchResultCard(
+private fun LocalBookCard(
     searchResult: SearchResult,
     searchQuery: String,
-    onClick: () -> Unit,
+    onBookClick: () -> Unit,
     vm: BooksVm
 ) {
-    var menuExpanded by remember { mutableStateOf(false) }
-
     ElevatedCard(
-        onClick = onClick,
+        onClick = onBookClick,
         modifier = Modifier.fillMaxWidth(),
-        elevation = CardDefaults.elevatedCardElevation(defaultElevation = 2.dp)
+        elevation = CardDefaults.elevatedCardElevation(defaultElevation = 1.dp)
     ) {
         Row(
             modifier = Modifier
@@ -270,7 +295,6 @@ private fun SearchResultCard(
             verticalAlignment = Alignment.Top
         ) {
             Column(modifier = Modifier.weight(1f)) {
-                // Title and source
                 Row(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
@@ -289,7 +313,6 @@ private fun SearchResultCard(
                     )
                 }
 
-                // Author
                 searchResult.author?.let { author ->
                     Text(
                         text = "by $author",
@@ -299,7 +322,6 @@ private fun SearchResultCard(
                     )
                 }
 
-                // Saga
                 searchResult.saga?.let { saga ->
                     Text(
                         text = "📚 $saga",
@@ -309,70 +331,28 @@ private fun SearchResultCard(
                     )
                 }
 
-                // Description
-                searchResult.description?.let { description ->
-                    Text(
-                        text = description,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.padding(top = 4.dp)
-                    )
-                }
+                // Status indicators
+                Row(
+                    modifier = Modifier.padding(top = 8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    searchResult.status?.let { status ->
+                        val statusColor = when (ReadingStatus.valueOf(status)) {
+                            ReadingStatus.READ -> MaterialTheme.colorScheme.primary
+                            ReadingStatus.READING -> MaterialTheme.colorScheme.secondary
+                            ReadingStatus.NOT_STARTED -> MaterialTheme.colorScheme.tertiary
 
-                // Status chip for local books
-                if (searchResult.source == "local" && searchResult.status != null) {
-                    val statusText = when (searchResult.status) {
-                        "NOT_STARTED" -> "Unread"
-                        "READING" -> "Reading"
-                        "READ" -> "Read"
-                        else -> searchResult.status
-                    }
-                    val statusColor = when (searchResult.status) {
-                        "NOT_STARTED" -> MaterialTheme.colorScheme.outline
-                        "READING" -> MaterialTheme.colorScheme.primary
-                        "READ" -> Color(0xFF4CAF50)
-                        else -> MaterialTheme.colorScheme.outline
+                        }
+                        StatusChip(text = status.replace("_", " "), color = statusColor)
                     }
 
-                    StatusChip(
-                        text = statusText,
-                        color = statusColor
-                    )
-                }
-            }
-
-            // Menu for local books only
-            if (searchResult.source == "local") {
-                Box {
-                    IconButton(onClick = { menuExpanded = true }) {
-                        Icon(Icons.Default.MoreVert, contentDescription = "Options")
-                    }
-                    DropdownMenu(
-                        expanded = menuExpanded,
-                        onDismissRequest = { menuExpanded = false }
-                    ) {
-                        DropdownMenuItem(
-                            text = { Text("Mark as Reading") },
-                            onClick = {
-                                // TODO: Update status
-                                menuExpanded = false
-                            },
-                            leadingIcon = {
-                                Icon(Icons.Default.PlayArrow, contentDescription = null)
-                            }
-                        )
-                        DropdownMenuItem(
-                            text = { Text("Mark as Read") },
-                            onClick = {
-                                // TODO: Update status
-                                menuExpanded = false
-                            },
-                            leadingIcon = {
-                                Icon(Icons.Default.CheckCircle, contentDescription = null)
-                            }
-                        )
+                    searchResult.wishlist?.let { wishlist ->
+                        val wishlistColor = when (WishlistStatus.valueOf(wishlist)) {
+                            WishlistStatus.WISH -> MaterialTheme.colorScheme.secondary
+                            WishlistStatus.ON_THE_WAY -> MaterialTheme.colorScheme.tertiary
+                            WishlistStatus.OBTAINED -> MaterialTheme.colorScheme.primary
+                        }
+                        StatusChip(text = wishlist.replace("_", " "), color = wishlistColor)
                     }
                 }
             }
@@ -380,7 +360,6 @@ private fun SearchResultCard(
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun GoogleBookCard(
     searchResult: SearchResult,
@@ -538,52 +517,8 @@ private fun EmptySearchState() {
         Text(
             text = "Find books by title, author, or saga.\nResults include your library and Google Books!",
             style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.outline,
-            textAlign = TextAlign.Center
-        )
-    }
-}
-
-@Composable
-private fun NoResultsFound(searchQuery: String) {
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(32.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
-    ) {
-        Icon(
-            Icons.Default.SearchOff,
-            contentDescription = null,
-            modifier = Modifier.size(64.dp),
-            tint = MaterialTheme.colorScheme.outline
-        )
-
-        Spacer(Modifier.height(16.dp))
-
-        Text(
-            text = "No results found",
-            style = MaterialTheme.typography.headlineSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
-            fontWeight = FontWeight.Medium
-        )
-
-        Spacer(Modifier.height(8.dp))
-
-        Text(
-            text = "Try adjusting your search:\n• Check spelling\n• Use different keywords\n• Search by author or saga",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.outline,
             textAlign = TextAlign.Center
-        )
-
-        Spacer(Modifier.height(16.dp))
-
-        Text(
-            text = "Searched for: \"$searchQuery\"",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.outline
         )
     }
 }
