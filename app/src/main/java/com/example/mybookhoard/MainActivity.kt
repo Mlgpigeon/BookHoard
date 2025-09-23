@@ -9,6 +9,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.MenuBook
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CloudSync
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -111,6 +112,7 @@ sealed class Screen {
     object Add : Screen()
     object Sync : Screen()
     object Profile : Screen()
+    object Settings : Screen()  // AÑADIR ESTA LÍNEA
     data class BookDetail(val bookId: Long) : Screen()
     data class EditBook(val bookId: Long) : Screen()
 }
@@ -174,11 +176,12 @@ fun MainAppScreen(
                                 icon = { Icon(Icons.Filled.Add, contentDescription = "Add") },
                                 label = { Text("Add") }
                             )
+                            // CAMBIAR: Reemplazar Sync por Profile
                             NavigationBarItem(
-                                selected = screen == Screen.Sync,
-                                onClick = { currentScreen = Screen.Sync },
-                                icon = { Icon(Icons.Filled.CloudSync, contentDescription = "Sync") },
-                                label = { Text("Sync") }
+                                selected = screen == Screen.Profile,
+                                onClick = { currentScreen = Screen.Profile },
+                                icon = { Icon(Icons.Filled.Person, contentDescription = "Profile") },
+                                label = { Text("Profile") }
                             )
                         }
                     }
@@ -207,7 +210,14 @@ fun MainAppScreen(
                             ProfileScreen(
                                 vm = vm,
                                 user = authState.user,
-                                onNavigateBack = { currentScreen = Screen.Library }
+                                onNavigateBack = { currentScreen = Screen.Library },
+                                onNavigateToSettings = { currentScreen = Screen.Settings }
+                            )
+                        }
+                        Screen.Settings -> {
+                            SettingsScreen(
+                                onNavigateBack = { currentScreen = Screen.Profile },
+                                onNavigateToBackup = { currentScreen = Screen.Sync }
                             )
                         }
                     }
@@ -265,3 +275,4 @@ fun ConnectionIndicator(
         }
     }
 }
+

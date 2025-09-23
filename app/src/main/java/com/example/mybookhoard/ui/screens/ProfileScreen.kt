@@ -22,7 +22,8 @@ import kotlinx.coroutines.launch
 fun ProfileScreen(
     vm: BooksVm,
     user: User,
-    onNavigateBack: () -> Unit
+    onNavigateBack: () -> Unit,
+    onNavigateToSettings: () -> Unit
 ) {
     val books by vm.items.collectAsState(initial = emptyList())
     val scope = rememberCoroutineScope()
@@ -38,6 +39,15 @@ fun ProfileScreen(
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
                         Icon(Icons.Default.ArrowBack, contentDescription = "Back")
+                    }
+                },
+                actions = {
+                    IconButton(onClick = onNavigateToSettings) {
+                        Icon(
+                            Icons.Default.Settings,
+                            contentDescription = "Settings",
+                            tint = MaterialTheme.colorScheme.onSurface
+                        )
                     }
                 }
             )
@@ -58,15 +68,9 @@ fun ProfileScreen(
             // Statistics Card
             LibraryStatsCard(books = books)
 
-            // Account Actions
+            // Account Actions (simplified - removed sync since it's now in settings)
             AccountActionsCard(
-                onSignOut = { showLogoutDialog = true },
-                onSyncData = {
-                    scope.launch {
-                        vm.syncFromServer()
-                        snackbarHostState.showSnackbar("Data synced successfully!")
-                    }
-                }
+                onSignOut = { showLogoutDialog = true }
             )
 
             // App Info
@@ -145,11 +149,6 @@ private fun UserInfoCard(user: User) {
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
-                Text(
-                    text = "Member since ${user.createdAt.take(10)}", // Show just the date part
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
             }
         }
     }
@@ -160,10 +159,7 @@ private fun LibraryStatsCard(books: List<com.example.mybookhoard.data.Book>) {
     val totalBooks = books.size
     val readBooks = books.count { it.status == ReadingStatus.READ }
     val readingBooks = books.count { it.status == ReadingStatus.READING }
-    val unreadBooks = books.count { it.status == ReadingStatus.NOT_STARTED }
-    val wishlistBooks = books.count {
-        it.wishlist == WishlistStatus.WISH || it.wishlist == WishlistStatus.ON_THE_WAY
-    }
+    val wishlistBooks = books.count { it.wishlist != WishlistStatus.WISH }
 
     ElevatedCard(
         modifier = Modifier.fillMaxWidth()
@@ -171,13 +167,14 @@ private fun LibraryStatsCard(books: List<com.example.mybookhoard.data.Book>) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(16.dp)
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             Row(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Icon(
-                    Icons.Default.MenuBook,
+                    Icons.Default.Analytics,
                     contentDescription = null,
                     tint = MaterialTheme.colorScheme.primary
                 )
@@ -189,67 +186,27 @@ private fun LibraryStatsCard(books: List<com.example.mybookhoard.data.Book>) {
                 )
             }
 
-            Spacer(Modifier.height(16.dp))
-
             Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceEvenly
+                horizontalArrangement = Arrangement.SpaceEvenly,
+                modifier = Modifier.fillMaxWidth()
             ) {
-                StatItem("Total", totalBooks, Icons.Default.LibraryBooks)
-                StatItem("Read", readBooks, Icons.Default.CheckCircle)
-                StatItem("Reading", readingBooks, Icons.Default.MenuBook)
-                StatItem("Wishlist", wishlistBooks, Icons.Default.Star)
-            }
-
-            if (totalBooks > 0) {
-                Spacer(Modifier.height(16.dp))
-
-                // Reading progress bar
-                val readPercentage = (readBooks.toFloat() / totalBooks.toFloat())
-
-                Column {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Text(
-                            text = "Reading Progress",
-                            style = MaterialTheme.typography.bodyMedium,
-                            fontWeight = FontWeight.Medium
-                        )
-                        Text(
-                            text = "${(readPercentage * 100).toInt()}%",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                    }
-
-                    Spacer(Modifier.height(4.dp))
-
-                    LinearProgressIndicator(
-                        progress = readPercentage,
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                }
+                StatItem("Total", totalBooks)
+                StatItem("Read", readBooks)
+                StatItem("Reading", readingBooks)
+                StatItem("Wishlist", wishlistBooks)
             }
         }
     }
 }
 
 @Composable
-private fun StatItem(
-    label: String,
-    value: Int,
-    icon: androidx.compose.ui.graphics.vector.ImageVector
-) {
+private fun StatItem(label: String, value: Int) {
     Column(
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(4.dp)
+        horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Icon(
-            icon,
+            Icons.Default.MenuBook,
             contentDescription = null,
-            modifier = Modifier.size(24.dp),
             tint = MaterialTheme.colorScheme.primary
         )
         Text(
@@ -268,8 +225,7 @@ private fun StatItem(
 
 @Composable
 private fun AccountActionsCard(
-    onSignOut: () -> Unit,
-    onSyncData: () -> Unit
+    onSignOut: () -> Unit
 ) {
     ElevatedCard(
         modifier = Modifier.fillMaxWidth()
@@ -284,7 +240,7 @@ private fun AccountActionsCard(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Icon(
-                    Icons.Default.Settings,
+                    Icons.Default.AccountCircle,
                     contentDescription = null,
                     tint = MaterialTheme.colorScheme.primary
                 )
@@ -297,19 +253,6 @@ private fun AccountActionsCard(
             }
 
             Spacer(Modifier.height(8.dp))
-
-            OutlinedButton(
-                onClick = onSyncData,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Icon(
-                    Icons.Default.CloudSync,
-                    contentDescription = null,
-                    modifier = Modifier.size(18.dp)
-                )
-                Spacer(Modifier.width(8.dp))
-                Text("Sync Data")
-            }
 
             OutlinedButton(
                 onClick = onSignOut,
@@ -332,11 +275,8 @@ private fun AccountActionsCard(
 
 @Composable
 private fun AppInfoCard() {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
-        )
+    ElevatedCard(
+        modifier = Modifier.fillMaxWidth()
     ) {
         Column(
             modifier = Modifier
@@ -350,24 +290,24 @@ private fun AppInfoCard() {
                 Icon(
                     Icons.Default.Info,
                     contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    tint = MaterialTheme.colorScheme.primary
                 )
                 Spacer(Modifier.width(8.dp))
                 Text(
-                    text = "About BookHoard",
+                    text = "App Information",
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold
                 )
             }
 
             Text(
-                text = "Version 1.0.0",
+                text = "BookHoard v1.0.0",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
             Text(
-                text = "Your personal library manager with cloud sync",
-                style = MaterialTheme.typography.bodyMedium,
+                text = "Your personal book management companion",
+                style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
