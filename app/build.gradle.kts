@@ -10,7 +10,7 @@ android {
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "com.example.bookhoard"
+        applicationId = "com.example.mybookhoard"
         minSdk = 31
         targetSdk = 36
         versionCode = 1

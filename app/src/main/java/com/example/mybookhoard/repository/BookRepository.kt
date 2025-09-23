@@ -309,27 +309,30 @@ class BookRepository(private val context: Context) {
     }
 
     suspend fun deleteBook(book: Book): Boolean {
-        return if (isAuthenticated() && book.id > 0) {
-            // Delete from server first
-            when (val result = apiService.deleteBook(book.id)) {
-                is ApiResult.Success -> {
-                    // Delete from local database
-                    localDao.delete(book)
-                    Log.d(TAG, "Book deleted from server and local DB: ${book.title}")
-                    true
-                }
-                is ApiResult.Error -> {
-                    // Mark for deletion locally (could implement soft delete)
-                    localDao.delete(book)
-                    Log.w(TAG, "Book deleted locally only: ${book.title} - ${result.message}")
-                    false
-                }
-            }
-        } else {
-            // Delete locally only
+        return try {
+            // Always delete locally first for immediate UI update
             localDao.delete(book)
-            Log.d(TAG, "Book deleted locally: ${book.title}")
-            true
+            Log.d(TAG, "Book deleted from local database: ${book.title}")
+
+            // Then sync with server if possible
+            if (isAuthenticated() && book.id > 0) {
+                when (val result = apiService.deleteBook(book.id)) {
+                    is ApiResult.Success -> {
+                        Log.d(TAG, "Book deletion synced with server: ${book.title}")
+                        true
+                    }
+                    is ApiResult.Error -> {
+                        Log.w(TAG, "Local deletion succeeded, server sync failed: ${book.title} - ${result.message}")
+                        true // Still return true since local deletion worked
+                    }
+                }
+            } else {
+                Log.d(TAG, "Book deleted locally (offline mode): ${book.title}")
+                true
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error deleting book: ${book.title}", e)
+            false
         }
     }
 

@@ -319,6 +319,22 @@ fun LiveBookRow(
                         }
                     )
                 }
+
+                HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+
+                // Delete Section
+                DropdownMenuItem(
+                    text = {
+                        Text(
+                            "🗑️ Delete Book",
+                            color = MaterialTheme.colorScheme.error
+                        )
+                    },
+                    onClick = {
+                        vm.deleteBook(book)
+                        menuExpanded = false
+                    }
+                )
             }
         }
     }

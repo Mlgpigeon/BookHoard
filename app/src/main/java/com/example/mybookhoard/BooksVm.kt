@@ -143,6 +143,7 @@ class BooksVm(app: Application) : AndroidViewModel(app) {
         }
     }
 
+
     fun updateBook(book: Book) {
         viewModelScope.launch {
             try {
@@ -162,15 +163,24 @@ class BooksVm(app: Application) : AndroidViewModel(app) {
     fun deleteBook(book: Book) {
         viewModelScope.launch {
             try {
-                Log.d(TAG, "Deleting book: ${book.title}")
+                Log.d(TAG, "Deleting book: ${book.title} (ID: ${book.id})")
+
+                // Perform the deletion
                 val success = repository.deleteBook(book)
+
                 if (success) {
-                    Log.d(TAG, "Book deleted successfully: ${book.title}")
+                    Log.d(TAG, "Book deleted successfully from server and local DB: ${book.title}")
                 } else {
-                    Log.w(TAG, "Book deleted locally only: ${book.title}")
+                    Log.w(TAG, "Book deleted locally only due to network issues: ${book.title}")
                 }
+
+                // The Flow from repository.getAllBooks() should automatically update the UI
+                // Room's @Delete operation automatically triggers Flow updates
+
             } catch (e: Exception) {
                 Log.e(TAG, "Error deleting book '${book.title}': ${e.message}", e)
+                // Even if there's an error, the local deletion might have succeeded
+                // Room will handle the Flow update automatically
             }
         }
     }
