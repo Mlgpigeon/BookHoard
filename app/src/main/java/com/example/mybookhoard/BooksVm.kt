@@ -8,14 +8,12 @@ import androidx.lifecycle.viewModelScope
 import com.example.mybookhoard.api.*
 import com.example.mybookhoard.data.*
 import com.example.mybookhoard.repository.BookRepository
-import com.example.mybookhoard.utils.FuzzySearchUtils
-import com.github.doyaaaaaken.kotlincsv.dsl.csvReader
-import kotlinx.coroutines.FlowPreview
+import com.example.mybookhoard.viewmodels.AuthVm
+import com.example.mybookhoard.viewmodels.SearchVm
+import com.example.mybookhoard.viewmodels.SyncVm
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.delay
 
-@OptIn(FlowPreview::class)
 class BooksVm(app: Application) : AndroidViewModel(app) {
 
     companion object {
@@ -24,215 +22,58 @@ class BooksVm(app: Application) : AndroidViewModel(app) {
 
     private val repository = BookRepository(app)
 
-    // Authentication state
-    val authState: StateFlow<AuthState> = repository.authState
-    val connectionState: StateFlow<ConnectionState> = repository.connectionState
+    // Modular ViewModels
+    val authVm = AuthVm(repository)
+    val searchVm = SearchVm(repository)
+    val syncVm = SyncVm(repository)
 
-    // All books from repository
-    val items: Flow<List<Book>> = repository.getAllBooks()
+    // Expose auth state through delegation
+    val authState: StateFlow<AuthState> = authVm.authState
+    val connectionState: StateFlow<ConnectionState> = authVm.connectionState
 
-    // Search states with debouncing
-    private val _searchQuery = MutableStateFlow("")
-    val searchQuery: StateFlow<String> = _searchQuery
+    // Expose search functionality
+    val items: Flow<List<Book>> = searchVm.items
+    val searchQuery: StateFlow<String> = searchVm.searchQuery
+    val wishlistSearchQuery: StateFlow<String> = searchVm.wishlistSearchQuery
+    val filteredBooks: Flow<List<Book>> = searchVm.filteredBooks
+    val filteredWishlistBooks: Flow<List<Book>> = searchVm.filteredWishlistBooks
 
-    private val _wishlistSearchQuery = MutableStateFlow("")
-    val wishlistSearchQuery: StateFlow<String> = _wishlistSearchQuery
+    // Auth methods delegation
+    fun login(identifier: String, password: String) = authVm.login(identifier, password)
+    fun register(username: String, email: String, password: String) = authVm.register(username, email, password)
+    fun logout() = authVm.logout()
+    fun getProfile() = authVm.getProfile()
+    fun testConnection() = authVm.testConnection()
+    fun clearAuthError() = authVm.clearAuthError()
+    fun clearConnectionError() = authVm.clearConnectionError()
+    fun retryNetworkOperation() = authVm.retryNetworkOperation()
 
-    // Debounced search queries (300ms delay)
-    private val debouncedSearchQuery = _searchQuery
-        .debounce(300)
-        .distinctUntilChanged()
+    // Search methods delegation
+    fun updateSearchQuery(query: String) = searchVm.updateSearchQuery(query)
+    fun updateWishlistSearchQuery(query: String) = searchVm.updateWishlistSearchQuery(query)
+    fun clearSearch() = searchVm.clearSearch()
+    fun clearWishlistSearch() = searchVm.clearWishlistSearch()
+    fun getSearchSuggestions(query: String, isWishlist: Boolean = false) = searchVm.getSearchSuggestions(query, isWishlist)
+    fun searchAuthorSuggestions(query: String) = searchVm.searchAuthorSuggestions(query)
+    fun searchSagaSuggestions(query: String) = searchVm.searchSagaSuggestions(query)
 
-    private val debouncedWishlistSearchQuery = _wishlistSearchQuery
-        .debounce(300)
-        .distinctUntilChanged()
+    // Sync methods delegation
+    fun syncFromServer() = syncVm.syncFromServer()
+    fun syncToServer() = syncVm.syncToServer()
+    fun replaceAll(list: List<Book>) = syncVm.replaceAll(list)
+    fun importFromAssetsOnce(ctx: Context) = syncVm.importFromAssetsOnce(ctx, authVm)
 
-    // Filtered books using repository search
-    val filteredBooks: Flow<List<Book>> = combine(items, debouncedSearchQuery) { books, query ->
-        if (query.isBlank()) {
-            books
-        } else {
-            FuzzySearchUtils.searchBooksSimple(books, query, threshold = 0.25)
-        }
-    }
-
-    // Wishlist books with search
-    val filteredWishlistBooks: Flow<List<Book>> = combine(
-        repository.getWishlistBooks(),
-        debouncedWishlistSearchQuery
-    ) { books, query ->
-        if (query.isBlank()) {
-            books
-        } else {
-            FuzzySearchUtils.searchBooksSimple(books, query, threshold = 0.25)
-        }
-    }
-
-    // Authentication methods with improved error handling
-    fun login(identifier: String, password: String) {
-        if (identifier.isBlank() || password.isBlank()) {
-            Log.w(TAG, "Login attempt with empty credentials")
-            return
-        }
-
-        viewModelScope.launch {
-            try {
-                Log.d(TAG, "Starting login for: $identifier")
-                val result = repository.login(identifier, password)
-
-                when (result) {
-                    is AuthResult.Success -> {
-                        Log.d(TAG, "Login successful for: ${result.user.username}")
-                    }
-                    is AuthResult.Error -> {
-                        Log.e(TAG, "Login failed: ${result.message}")
-                    }
-                }
-            } catch (e: Exception) {
-                Log.e(TAG, "Login error: ${e.message}", e)
-                // Set error state if repository didn't handle it
-                if (authState.value !is AuthState.Error) {
-                    repository.authState.let { state ->
-                        if (state is MutableStateFlow) {
-                            state.value = AuthState.Error("Login failed: ${e.message}")
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    fun register(username: String, email: String, password: String) {
-        if (username.isBlank() || email.isBlank() || password.isBlank()) {
-            Log.w(TAG, "Registration attempt with empty fields")
-            return
-        }
-
-        viewModelScope.launch {
-            try {
-                Log.d(TAG, "Starting registration for: $username")
-                val result = repository.register(username, email, password)
-
-                when (result) {
-                    is AuthResult.Success -> {
-                        Log.d(TAG, "Registration successful for: ${result.user.username}")
-                    }
-                    is AuthResult.Error -> {
-                        Log.e(TAG, "Registration failed: ${result.message}")
-                    }
-                }
-            } catch (e: Exception) {
-                Log.e(TAG, "Registration error: ${e.message}", e)
-                // Set error state if repository didn't handle it
-                if (authState.value !is AuthState.Error) {
-                    repository.authState.let { state ->
-                        if (state is MutableStateFlow) {
-                            state.value = AuthState.Error("Registration failed: ${e.message}")
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    fun logout() {
-        viewModelScope.launch {
-            try {
-                Log.d(TAG, "Starting logout")
-                repository.logout()
-                Log.d(TAG, "Logout successful")
-            } catch (e: Exception) {
-                Log.e(TAG, "Logout error: ${e.message}", e)
-            }
-        }
-    }
-
-    fun getProfile() {
-        viewModelScope.launch {
-            try {
-                repository.getProfile()
-            } catch (e: Exception) {
-                Log.e(TAG, "Get profile error: ${e.message}", e)
-            }
-        }
-    }
-
-    // Test connectivity
-    fun testConnection() {
-        viewModelScope.launch {
-            try {
-                Log.d(TAG, "Testing connection...")
-                // This would use a new method in repository/apiService for health check
-                // For now, we'll just try to get profile if authenticated
-                if (isAuthenticated()) {
-                    repository.getProfile()
-                }
-            } catch (e: Exception) {
-                Log.e(TAG, "Connection test error: ${e.message}", e)
-            }
-        }
-    }
-
-    // Clear error state
-    fun clearAuthError() {
-        repository.clearAuthError()
-    }
-
-    fun clearConnectionError() {
-        repository.clearConnectionError()
-    }
-
-    // Search suggestions
-    fun getSearchSuggestions(query: String, isWishlist: Boolean = false): Flow<List<String>> {
-        return if (isWishlist) {
-            combine(repository.getWishlistBooks(), debouncedWishlistSearchQuery) { books, _ ->
-                if (query.length < 2) emptyList()
-                else FuzzySearchUtils.generateSearchSuggestions(books, query)
-            }
-        } else {
-            combine(items, debouncedSearchQuery) { books, _ ->
-                if (query.length < 2) emptyList()
-                else FuzzySearchUtils.generateSearchSuggestions(books, query)
-            }
-        }
-    }
-
-    fun searchAuthorSuggestions(query: String): Flow<List<String>> {
-        return if (query.length < 2) {
-            flowOf(emptyList())
-        } else {
-            repository.getUniqueAuthors().map { authors ->
-                FuzzySearchUtils.searchAuthorsSimple(authors, query, threshold = 0.3)
-            }
-        }
-    }
-
-    fun searchSagaSuggestions(query: String): Flow<List<String>> {
-        return if (query.length < 2) {
-            flowOf(emptyList())
-        } else {
-            repository.getUniqueSagas().map { sagas ->
-                FuzzySearchUtils.searchAuthorsSimple(sagas, query, threshold = 0.3)
-            }
-        }
-    }
-
-    // Search query updates
-    fun updateSearchQuery(query: String) {
-        _searchQuery.value = query
-    }
-
-    fun updateWishlistSearchQuery(query: String) {
-        _wishlistSearchQuery.value = query
-    }
-
-    fun clearSearch() {
-        _searchQuery.value = ""
-    }
-
-    fun clearWishlistSearch() {
-        _wishlistSearchQuery.value = ""
-    }
+    // Status helpers delegation
+    fun isOnline(): Boolean = authVm.isOnline()
+    fun isOffline(): Boolean = authVm.isOffline()
+    fun isSyncing(): Boolean = authVm.isSyncing()
+    fun hasConnectionError(): Boolean = authVm.hasConnectionError()
+    fun isAuthenticated(): Boolean = authVm.isAuthenticated()
+    fun isAuthenticating(): Boolean = authVm.isAuthenticating()
+    fun hasAuthError(): Boolean = authVm.hasAuthError()
+    fun getCurrentUser(): User? = authVm.getCurrentUser()
+    fun getAuthErrorMessage(): String? = authVm.getAuthErrorMessage()
+    fun getConnectionErrorMessage(): String? = authVm.getConnectionErrorMessage()
 
     // Book operations with improved error handling
     fun addBook(book: Book) {
@@ -313,297 +154,5 @@ class BooksVm(app: Application) : AndroidViewModel(app) {
 
     fun getBookById(id: Long): Flow<Book?> {
         return repository.getBookById(id)
-    }
-
-    // Bulk operations
-    fun replaceAll(list: List<Book>) {
-        viewModelScope.launch {
-            try {
-                Log.d(TAG, "Replacing all books with ${list.size} books")
-                repository.replaceAllBooks(list)
-                Log.d(TAG, "All books replaced successfully")
-            } catch (e: Exception) {
-                Log.e(TAG, "Error replacing all books: ${e.message}", e)
-            }
-        }
-    }
-
-    // Import from assets (only for first run or offline mode)
-    fun importFromAssetsOnce(ctx: Context) {
-        viewModelScope.launch {
-            try {
-                // Only import if not authenticated and no local data
-                if (authState.value !is AuthState.Authenticated) {
-                    val current = items.firstOrNull() ?: emptyList()
-                    if (current.isEmpty()) {
-                        Log.d(TAG, "Importing initial data from assets")
-                        val csv = ctx.assets.open("libros_iniciales.csv")
-                            .bufferedReader().use { it.readText() }
-                        val books = parseCsv(csv)
-                        repository.replaceAllBooks(books)
-                        Log.d(TAG, "Imported ${books.size} books from assets")
-                    }
-                }
-            } catch (e: Exception) {
-                Log.e(TAG, "Error importing from assets: ${e.message}", e)
-            }
-        }
-    }
-
-    // Sync operations with retry logic
-    fun syncFromServer() {
-        viewModelScope.launch {
-            try {
-                Log.d(TAG, "Starting sync from server")
-                val result = repository.syncFromServer()
-                when (result) {
-                    is SyncResult.Success -> {
-                        Log.d(TAG, "Sync from server successful")
-                    }
-                    is SyncResult.Error -> {
-                        Log.e(TAG, "Sync from server failed: ${result.message}")
-                    }
-                    is SyncResult.Partial -> {
-                        Log.w(TAG, "Sync from server partial: ${result.message}")
-                    }
-                }
-            } catch (e: Exception) {
-                Log.e(TAG, "Sync from server error: ${e.message}", e)
-            }
-        }
-    }
-
-    fun syncToServer() {
-        viewModelScope.launch {
-            try {
-                Log.d(TAG, "Starting sync to server")
-                val result = repository.syncToServer()
-                when (result) {
-                    is SyncResult.Success -> {
-                        Log.d(TAG, "Sync to server successful")
-                    }
-                    is SyncResult.Error -> {
-                        Log.e(TAG, "Sync to server failed: ${result.message}")
-                    }
-                    is SyncResult.Partial -> {
-                        Log.w(TAG, "Sync to server partial: ${result.message}")
-                    }
-                }
-            } catch (e: Exception) {
-                Log.e(TAG, "Sync to server error: ${e.message}", e)
-            }
-        }
-    }
-
-    // Auto-retry mechanism for network operations
-    fun retryNetworkOperation() {
-        viewModelScope.launch {
-            Log.d(TAG, "Retrying network operation...")
-            delay(1000) // Brief delay before retry
-
-            if (isAuthenticated()) {
-                syncFromServer()
-            } else {
-                testConnection()
-            }
-        }
-    }
-
-    // CSV parsing (kept for local imports)
-    private fun parseCsv(csv: String): List<Book> {
-        return try {
-            val reader = csvReader {
-                skipEmptyLine = true
-                autoRenameDuplicateHeaders = true
-            }
-            val rows = reader.readAllWithHeader(csv.byteInputStream())
-
-            rows.mapNotNull { r ->
-                try {
-                    val title = r["Title"]?.trim().orEmpty()
-                    if (title.isBlank()) return@mapNotNull null
-
-                    val readStr = r["Read"]?.trim()?.lowercase().orEmpty()
-                    val saga = r["Saga"]?.trim().orEmpty().ifBlank { null }
-                    val author = r["Author"]?.trim().orEmpty().ifBlank { null }
-                    val description = r["Description"]?.trim().orEmpty().ifBlank { null }
-
-                    val status = when (readStr) {
-                        "leyendo", "reading" -> ReadingStatus.READING
-                        "read", "true", "1", "sí", "si", "x", "✓", "✔" -> ReadingStatus.READ
-                        else -> ReadingStatus.NOT_STARTED
-                    }
-
-                    val wishlistStr = r["Wishlist"]?.trim()?.uppercase().orEmpty()
-                    val wishlistStatus = when (wishlistStr) {
-                        "WISH" -> WishlistStatus.WISH
-                        "ON_THE_WAY" -> WishlistStatus.ON_THE_WAY
-                        "OBTAINED" -> WishlistStatus.OBTAINED
-                        else -> null
-                    }
-
-                    Book(
-                        title = title,
-                        author = author,
-                        saga = saga,
-                        description = description,
-                        status = status,
-                        wishlist = wishlistStatus
-                    )
-                } catch (e: Exception) {
-                    Log.w(TAG, "Error parsing CSV row: ${e.message}")
-                    null
-                }
-            }
-        } catch (e: Exception) {
-            Log.e(TAG, "Error parsing CSV: ${e.message}", e)
-            emptyList()
-        }
-    }
-
-    // Connection status helpers
-    fun isOnline(): Boolean = connectionState.value is ConnectionState.Online
-    fun isOffline(): Boolean = connectionState.value is ConnectionState.Offline
-    fun isSyncing(): Boolean = connectionState.value is ConnectionState.Syncing
-    fun hasConnectionError(): Boolean = connectionState.value is ConnectionState.Error
-
-    // Auth status helpers
-    fun isAuthenticated(): Boolean = authState.value is AuthState.Authenticated
-    fun isAuthenticating(): Boolean = authState.value is AuthState.Authenticating
-    fun hasAuthError(): Boolean = authState.value is AuthState.Error
-
-    fun getCurrentUser(): User? {
-        return when (val state = authState.value) {
-            is AuthState.Authenticated -> state.user
-            else -> null
-        }
-    }
-
-    fun getAuthErrorMessage(): String? {
-        return when (val state = authState.value) {
-            is AuthState.Error -> state.message
-            else -> null
-        }
-    }
-
-    fun getConnectionErrorMessage(): String? {
-        return when (val state = connectionState.value) {
-            is ConnectionState.Error -> state.message
-            else -> null
-        }
-    }
-    // Session management methods
-
-    fun refreshSessionIfNeeded() {
-        viewModelScope.launch {
-            try {
-                Log.d(TAG, "Checking if session refresh is needed...")
-                repository.refreshSession()
-            } catch (e: Exception) {
-                Log.e(TAG, "Error refreshing session: ${e.message}", e)
-            }
-        }
-    }
-
-    fun importFromAssetsIfNeeded() {
-        viewModelScope.launch {
-            try {
-                // Only import if:
-                // 1. Not authenticated OR
-                // 2. Authenticated but no local data
-                val shouldImport = when (authState.value) {
-                    is AuthState.NotAuthenticated -> {
-                        val current = items.firstOrNull() ?: emptyList()
-                        current.isEmpty()
-                    }
-                    is AuthState.Authenticated -> {
-                        // Don't import if authenticated, let sync handle it
-                        false
-                    }
-                    else -> false
-                }
-
-                if (shouldImport) {
-                    Log.d(TAG, "Importing initial data from assets (offline mode)")
-                    val context = getApplication<Application>().applicationContext
-                    val csv = context.assets.open("libros_iniciales.csv")
-                        .bufferedReader().use { it.readText() }
-                    val books = parseCsv(csv)
-                    repository.replaceAllBooks(books)
-                    Log.d(TAG, "Imported ${books.size} books from assets")
-                } else {
-                    Log.d(TAG, "Skipping asset import - not needed")
-                }
-            } catch (e: Exception) {
-                Log.e(TAG, "Error importing from assets: ${e.message}", e)
-            }
-        }
-    }
-
-    // Session status helpers
-    fun hasValidSession(): Boolean {
-        return repository.hasValidSession()
-    }
-
-    fun getSessionUser(): User? {
-        return when (val state = authState.value) {
-            is AuthState.Authenticated -> state.user
-            else -> null
-        }
-    }
-
-    // Enhanced connection handling
-    fun retryConnectionWithBackoff() {
-        viewModelScope.launch {
-            Log.d(TAG, "Retrying connection with exponential backoff...")
-
-            val delays = listOf(1000L, 2000L, 5000L, 10000L) // Exponential backoff
-
-            for (delay in delays) {
-                delay(delay)
-
-                if (isAuthenticated()) {
-                    syncFromServer()
-                    if (isOnline()) {
-                        Log.d(TAG, "Connection restored successfully")
-                        break
-                    }
-                } else {
-                    testConnection()
-                    if (connectionState.value !is ConnectionState.Error) {
-                        Log.d(TAG, "Connection test successful")
-                        break
-                    }
-                }
-
-                Log.d(TAG, "Retry attempt failed, waiting ${delay}ms before next attempt")
-            }
-        }
-    }
-
-    // Session validation (call periodically)
-    fun validateSession() {
-        if (isAuthenticated()) {
-            viewModelScope.launch {
-                try {
-                    val result = repository.getProfile()
-                    when (result) {
-                        is ApiResult.Success -> {
-                            Log.d(TAG, "Session validation successful")
-                        }
-                        is ApiResult.Error -> {
-                            Log.w(TAG, "Session validation failed: ${result.message}")
-                            if (result.message.contains("401") ||
-                                result.message.contains("unauthorized", ignoreCase = true)) {
-                                // Session expired, force logout
-                                logout()
-                            }
-                        }
-                    }
-                } catch (e: Exception) {
-                    Log.e(TAG, "Session validation error: ${e.message}")
-                }
-            }
-        }
     }
 }

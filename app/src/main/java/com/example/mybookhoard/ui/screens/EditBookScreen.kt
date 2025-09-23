@@ -10,9 +10,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.example.mybookhoard.BooksVm
 import com.example.mybookhoard.ui.components.BookForm
-import com.example.mybookhoard.ui.components.BookFormState
-import com.example.mybookhoard.ui.components.hasChanges
-import com.example.mybookhoard.ui.components.isValid
+import com.example.mybookhoard.ui.components.form.BookFormState
+import com.example.mybookhoard.ui.components.form.hasChanges
+import com.example.mybookhoard.ui.components.form.isValid
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay

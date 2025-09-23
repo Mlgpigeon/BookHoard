@@ -14,6 +14,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.example.mybookhoard.api.AuthState
 import com.example.mybookhoard.api.ConnectionState
@@ -31,47 +32,26 @@ class MainActivity : ComponentActivity() {
             }
         }
     }
-
-    override fun onResume() {
-        super.onResume()
-        // Refresh session when app comes to foreground
-        vm.refreshSessionIfNeeded()
-    }
 }
 
 @Composable
 fun AppContent(vm: BooksVm) {
     val authState by vm.authState.collectAsState()
     val connectionState by vm.connectionState.collectAsState()
+    val context = LocalContext.current
 
-    // Import initial data only if offline and no local data
+    // Import initial data only if not authenticated
     LaunchedEffect(authState) {
-        vm.importFromAssetsIfNeeded()
+        if (authState is AuthState.NotAuthenticated) {
+            vm.importFromAssetsOnce(context)
+        }
     }
 
     // Create local variable for smart cast
     val currentAuthState = authState
 
     when (currentAuthState) {
-        is AuthState.NotAuthenticated -> {
-            AuthScreen(
-                authState = currentAuthState,
-                onLogin = { identifier, password ->
-                    vm.login(identifier, password)
-                },
-                onRegister = { username, email, password ->
-                    vm.register(username, email, password)
-                },
-                onClearError = {
-                    vm.clearAuthError()
-                },
-                onRetry = {
-                    vm.retryNetworkOperation()
-                }
-            )
-        }
-
-        is AuthState.Error -> {
+        is AuthState.NotAuthenticated, is AuthState.Error -> {
             AuthScreen(
                 authState = currentAuthState,
                 onLogin = { identifier, password ->

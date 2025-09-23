@@ -8,8 +8,8 @@ import androidx.compose.ui.unit.dp
 import com.example.mybookhoard.BooksVm
 import com.example.mybookhoard.data.Book
 import com.example.mybookhoard.ui.components.BookForm
-import com.example.mybookhoard.ui.components.BookFormState
-import com.example.mybookhoard.ui.components.isValid
+import com.example.mybookhoard.ui.components.form.BookFormState
+import com.example.mybookhoard.ui.components.form.isValid
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
