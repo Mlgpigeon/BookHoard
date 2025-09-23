@@ -5,11 +5,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Email
-import androidx.compose.material.icons.filled.Lock
-import androidx.compose.material.icons.filled.Person
-import androidx.compose.material.icons.filled.Visibility
-import androidx.compose.material.icons.filled.VisibilityOff
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -22,16 +18,27 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.example.mybookhoard.api.AuthState
+import kotlinx.coroutines.delay
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AuthScreen(
     authState: AuthState,
     onLogin: (String, String) -> Unit,
-    onRegister: (String, String, String) -> Unit
+    onRegister: (String, String, String) -> Unit,
+    onClearError: (() -> Unit)? = null,
+    onRetry: (() -> Unit)? = null
 ) {
     var isLogin by remember { mutableStateOf(true) }
     val scrollState = rememberScrollState()
+
+    // Auto-clear errors after some time
+    LaunchedEffect(authState) {
+        if (authState is AuthState.Error) {
+            delay(10_000) // Clear error after 10 seconds
+            onClearError?.invoke()
+        }
+    }
 
     Column(
         modifier = Modifier
@@ -59,6 +66,16 @@ fun AuthScreen(
         )
 
         Spacer(Modifier.height(48.dp))
+
+        // Error handling with improved UX
+        if (authState is AuthState.Error) {
+            ErrorCard(
+                message = authState.message,
+                onDismiss = onClearError,
+                onRetry = onRetry
+            )
+            Spacer(Modifier.height(16.dp))
+        }
 
         // Form card
         ElevatedCard(
@@ -103,7 +120,10 @@ fun AuthScreen(
                         style = MaterialTheme.typography.bodyMedium
                     )
                     TextButton(
-                        onClick = { isLogin = !isLogin }
+                        onClick = {
+                            isLogin = !isLogin
+                            onClearError?.invoke() // Clear errors when switching
+                        }
                     ) {
                         Text(if (isLogin) "Sign Up" else "Sign In")
                     }
@@ -111,20 +131,132 @@ fun AuthScreen(
             }
         }
 
-        // Show auth errors
-        if (authState is AuthState.Error) {
+        // Connection info for debugging
+        if (authState is AuthState.Error && authState.message.contains("connect", ignoreCase = true)) {
             Spacer(Modifier.height(16.dp))
-            Card(
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.errorContainer
-                )
+            TroubleshootingCard()
+        }
+    }
+}
+
+@Composable
+private fun ErrorCard(
+    message: String,
+    onDismiss: (() -> Unit)?,
+    onRetry: (() -> Unit)?
+) {
+    Card(
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.errorContainer
+        ),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp)
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically
             ) {
+                Icon(
+                    Icons.Default.Warning,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onErrorContainer
+                )
+                Spacer(Modifier.width(8.dp))
                 Text(
-                    text = authState.message,
-                    modifier = Modifier.padding(16.dp),
+                    text = "Authentication Error",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onErrorContainer
                 )
             }
+
+            Spacer(Modifier.height(8.dp))
+
+            Text(
+                text = message,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onErrorContainer
+            )
+
+            if (onRetry != null || onDismiss != null) {
+                Spacer(Modifier.height(12.dp))
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    if (onRetry != null) {
+                        TextButton(
+                            onClick = onRetry,
+                            colors = ButtonDefaults.textButtonColors(
+                                contentColor = MaterialTheme.colorScheme.onErrorContainer
+                            )
+                        ) {
+                            Icon(
+                                Icons.Default.Refresh,
+                                contentDescription = null,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(Modifier.width(4.dp))
+                            Text("Retry")
+                        }
+                    }
+
+                    if (onDismiss != null) {
+                        TextButton(
+                            onClick = onDismiss,
+                            colors = ButtonDefaults.textButtonColors(
+                                contentColor = MaterialTheme.colorScheme.onErrorContainer
+                            )
+                        ) {
+                            Text("Dismiss")
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun TroubleshootingCard() {
+    Card(
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+        ),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp)
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    Icons.Default.Info,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    text = "Connection Troubleshooting",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+
+            Spacer(Modifier.height(8.dp))
+
+            Text(
+                text = "• Check your internet connection\n" +
+                        "• Try switching between WiFi and mobile data\n" +
+                        "• The server might be temporarily unavailable",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
         }
     }
 }
@@ -153,7 +285,10 @@ private fun LoginForm(
             keyboardType = KeyboardType.Email,
             imeAction = ImeAction.Next
         ),
-        singleLine = true
+        singleLine = true,
+        supportingText = {
+            Text("Enter your email address or username")
+        }
     )
 
     OutlinedTextField(
@@ -182,18 +317,25 @@ private fun LoginForm(
     )
 
     Button(
-        onClick = { onLogin(identifier, password) },
+        onClick = { onLogin(identifier.trim(), password) },
         modifier = Modifier.fillMaxWidth(),
         enabled = !isLoading && identifier.isNotBlank() && password.isNotBlank()
     ) {
         if (isLoading) {
             CircularProgressIndicator(
                 modifier = Modifier.size(20.dp),
-                strokeWidth = 2.dp
+                strokeWidth = 2.dp,
+                color = MaterialTheme.colorScheme.onPrimary
             )
             Spacer(Modifier.width(8.dp))
             Text("Signing In...")
         } else {
+            Icon(
+                Icons.Default.Login,
+                contentDescription = null,
+                modifier = Modifier.size(18.dp)
+            )
+            Spacer(Modifier.width(8.dp))
             Text("Sign In")
         }
     }
@@ -212,6 +354,7 @@ private fun RegisterForm(
 
     val isLoading = authState is AuthState.Authenticating
     val passwordsMatch = password == confirmPassword || confirmPassword.isEmpty()
+    val isValidEmail = email.isBlank() || android.util.Patterns.EMAIL_ADDRESS.matcher(email).matches()
 
     OutlinedTextField(
         value = username,
@@ -225,7 +368,10 @@ private fun RegisterForm(
         keyboardOptions = KeyboardOptions(
             imeAction = ImeAction.Next
         ),
-        singleLine = true
+        singleLine = true,
+        supportingText = {
+            Text("Choose a unique username")
+        }
     )
 
     OutlinedTextField(
@@ -241,7 +387,15 @@ private fun RegisterForm(
             keyboardType = KeyboardType.Email,
             imeAction = ImeAction.Next
         ),
-        singleLine = true
+        singleLine = true,
+        isError = !isValidEmail,
+        supportingText = {
+            if (!isValidEmail) {
+                Text("Please enter a valid email address")
+            } else {
+                Text("We'll use this for account recovery")
+            }
+        }
     )
 
     OutlinedTextField(
@@ -294,22 +448,30 @@ private fun RegisterForm(
     )
 
     Button(
-        onClick = { onRegister(username, email, password) },
+        onClick = { onRegister(username.trim(), email.trim(), password) },
         modifier = Modifier.fillMaxWidth(),
         enabled = !isLoading &&
                 username.isNotBlank() &&
                 email.isNotBlank() &&
+                isValidEmail &&
                 password.length >= 6 &&
                 passwordsMatch
     ) {
         if (isLoading) {
             CircularProgressIndicator(
                 modifier = Modifier.size(20.dp),
-                strokeWidth = 2.dp
+                strokeWidth = 2.dp,
+                color = MaterialTheme.colorScheme.onPrimary
             )
             Spacer(Modifier.width(8.dp))
             Text("Creating Account...")
         } else {
+            Icon(
+                Icons.Default.PersonAdd,
+                contentDescription = null,
+                modifier = Modifier.size(18.dp)
+            )
+            Spacer(Modifier.width(8.dp))
             Text("Create Account")
         }
     }

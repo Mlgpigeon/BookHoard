@@ -53,6 +53,12 @@ fun AppContent(vm: BooksVm) {
                 },
                 onRegister = { username, email, password ->
                     vm.register(username, email, password)
+                },
+                onClearError = {
+                    vm.clearAuthError()
+                },
+                onRetry = {
+                    vm.retryNetworkOperation()
                 }
             )
         }
@@ -83,6 +89,13 @@ fun LoadingScreen(message: String = "Loading...") {
             Text(
                 text = message,
                 style = MaterialTheme.typography.bodyLarge
+            )
+
+            // Add a subtle hint about network activity
+            Text(
+                text = "Please wait while we connect to the server...",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
     }
@@ -135,7 +148,10 @@ fun MainAppScreen(
                         title = { Text("BookHoard") },
                         actions = {
                             // Connection status indicator
-                            ConnectionIndicator(connectionState)
+                            ConnectionIndicator(
+                                connectionState = connectionState,
+                                onRetry = { vm.retryNetworkOperation() }
+                            )
                         }
                     )
                 },
@@ -208,7 +224,10 @@ fun MainAppScreen(
 }
 
 @Composable
-fun ConnectionIndicator(connectionState: ConnectionState) {
+fun ConnectionIndicator(
+    connectionState: ConnectionState,
+    onRetry: () -> Unit
+) {
     when (connectionState) {
         is ConnectionState.Online -> {
             Icon(
@@ -219,12 +238,17 @@ fun ConnectionIndicator(connectionState: ConnectionState) {
             )
         }
         is ConnectionState.Offline -> {
-            Icon(
-                Icons.Default.CloudSync,
-                contentDescription = "Offline",
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.size(20.dp)
-            )
+            IconButton(
+                onClick = onRetry,
+                modifier = Modifier.size(32.dp)
+            ) {
+                Icon(
+                    Icons.Default.CloudSync,
+                    contentDescription = "Offline - Tap to retry",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(20.dp)
+                )
+            }
         }
         is ConnectionState.Syncing -> {
             CircularProgressIndicator(
@@ -233,12 +257,17 @@ fun ConnectionIndicator(connectionState: ConnectionState) {
             )
         }
         is ConnectionState.Error -> {
-            Icon(
-                Icons.Default.CloudSync,
-                contentDescription = "Sync Error",
-                tint = MaterialTheme.colorScheme.error,
-                modifier = Modifier.size(20.dp)
-            )
+            IconButton(
+                onClick = onRetry,
+                modifier = Modifier.size(32.dp)
+            ) {
+                Icon(
+                    Icons.Default.CloudSync,
+                    contentDescription = "Sync Error - Tap to retry",
+                    tint = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.size(20.dp)
+                )
+            }
         }
     }
 }
