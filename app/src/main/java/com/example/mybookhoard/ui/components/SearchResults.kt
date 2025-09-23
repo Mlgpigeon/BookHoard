@@ -1,4 +1,5 @@
-// Replace the entire app/src/main/java/com/example/mybookhoard/ui/components/SearchResults.kt
+// File: app/src/main/java/com/example/mybookhoard/ui/components/SearchResults.kt
+// Changes: Only modify the onBookClick callback for local books to handle navigation properly
 
 package com.example.mybookhoard.ui.components
 
@@ -26,6 +27,7 @@ import com.example.mybookhoard.api.SearchResult
 fun SearchResults(
     vm: BooksVm,
     onBookClick: (Book) -> Unit,
+    onGoogleBookClick: (SearchResult) -> Unit = {}, // NEW: For Google Book details
     modifier: Modifier = Modifier
 ) {
     val searchQuery by vm.searchQuery.collectAsState()
@@ -107,7 +109,17 @@ fun SearchResults(
                                 searchResult = searchResult,
                                 searchQuery = searchQuery,
                                 onBookClick = {
-                                    val book = searchResult.toApiBook().toLocalBook()
+                                    // FIXED: Use the existing ID to navigate directly to BookDetail
+                                    // Create a minimal Book object just for navigation
+                                    val book = Book(
+                                        id = searchResult.id,
+                                        title = searchResult.title,
+                                        author = searchResult.author ?: "",
+                                        saga = searchResult.saga,
+                                        description = searchResult.description,
+                                        status = ReadingStatus.valueOf(searchResult.status ?: "NOT_STARTED"),
+                                        wishlist = searchResult.wishlist?.let { WishlistStatus.valueOf(it) }
+                                    )
                                     onBookClick(book)
                                 },
                                 vm = vm
@@ -123,13 +135,14 @@ fun SearchResults(
                         CategoryHeader(
                             title = "Google Books",
                             subtitle = "${results.googleResults.size} result${if (results.googleResults.size != 1) "s" else ""}",
-                            icon = Icons.Default.CloudSync
+                            icon = Icons.Default.CloudCircle
                         )
                     }
                     items(results.googleResults) { searchResult ->
                         GoogleBookCard(
                             searchResult = searchResult,
                             searchQuery = searchQuery,
+                            onBookClick = { onGoogleBookClick(searchResult) }, // NEW: Make whole card clickable
                             onAddToLibrary = { googleBook ->
                                 selectedGoogleBook = googleBook
                                 showAddDialog = true
@@ -138,14 +151,38 @@ fun SearchResults(
                     }
                 }
             }
-        } else if (searchQuery.isNotBlank() && !isSearchingGoogle) {
-            EmptySearchState()
+        } else if (searchQuery.isNotBlank()) {
+            // Show loading or empty state
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center
+            ) {
+                if (isSearchingGoogle) {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        CircularProgressIndicator()
+                        Spacer(Modifier.height(16.dp))
+                        Text(
+                            text = "Searching...",
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                    }
+                } else {
+                    Text(
+                        text = "No results found for \"$searchQuery\"",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        textAlign = TextAlign.Center
+                    )
+                }
+            }
         }
     }
 
     // Google Book Add Dialog
     if (showAddDialog && selectedGoogleBook != null) {
-        GoogleBookAddDialog(
+        AddGoogleBookDialog(
             book = selectedGoogleBook!!.toApiBook().toLocalBook(),
             onDismiss = {
                 showAddDialog = false
@@ -210,30 +247,31 @@ private fun SearchResultsHeader(
             }
 
             if (searchQuery.isNotBlank()) {
+                Spacer(Modifier.height(4.dp))
                 Text(
-                    text = "for \"$searchQuery\"",
+                    text = "Searching for \"$searchQuery\"",
                     style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(top = 4.dp)
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
 
-            if (localCount > 0 || googleCount > 0) {
-                Row(
-                    modifier = Modifier.padding(top = 8.dp),
-                    horizontalArrangement = Arrangement.spacedBy(16.dp)
-                ) {
+            if (totalResults > 0) {
+                Spacer(Modifier.height(8.dp))
+                Row {
                     if (localCount > 0) {
-                        StatusChip(
-                            text = "$localCount in your library",
-                            color = MaterialTheme.colorScheme.primary
-                        )
+                        Badge(
+                            containerColor = MaterialTheme.colorScheme.primaryContainer
+                        ) {
+                            Text("$localCount in library")
+                        }
                     }
                     if (googleCount > 0) {
-                        StatusChip(
-                            text = "$googleCount from Google Books",
-                            color = MaterialTheme.colorScheme.secondary
-                        )
+                        if (localCount > 0) Spacer(Modifier.width(8.dp))
+                        Badge(
+                            containerColor = MaterialTheme.colorScheme.secondaryContainer
+                        ) {
+                            Text("$googleCount on Google")
+                        }
                     }
                 }
             }
@@ -247,31 +285,36 @@ private fun CategoryHeader(
     subtitle: String,
     icon: androidx.compose.ui.graphics.vector.ImageVector
 ) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 8.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Icon(
-            icon,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.size(20.dp)
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant
         )
-        Spacer(Modifier.width(8.dp))
-        Column {
-            Text(
-                text = title,
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onSurface
+    ) {
+        Row(
+            modifier = Modifier.padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                icon,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(20.dp)
             )
-            Text(
-                text = subtitle,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+            Spacer(Modifier.width(8.dp))
+            Column {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Medium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Text(
+                    text = subtitle,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
         }
     }
 }
@@ -337,22 +380,31 @@ private fun LocalBookCard(
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     searchResult.status?.let { status ->
-                        val statusColor = when (ReadingStatus.valueOf(status)) {
-                            ReadingStatus.READ -> MaterialTheme.colorScheme.primary
-                            ReadingStatus.READING -> MaterialTheme.colorScheme.secondary
-                            ReadingStatus.NOT_STARTED -> MaterialTheme.colorScheme.tertiary
-
-                        }
-                        StatusChip(text = status.replace("_", " "), color = statusColor)
+                        StatusChip(
+                            text = when (status) {
+                                "NOT_STARTED" -> "Not Started"
+                                "READING" -> "Reading"
+                                "READ" -> "Read"
+                                else -> status
+                            },
+                            color = when (status) {
+                                "READ" -> MaterialTheme.colorScheme.primary
+                                "READING" -> MaterialTheme.colorScheme.tertiary
+                                else -> MaterialTheme.colorScheme.outline
+                            }
+                        )
                     }
 
                     searchResult.wishlist?.let { wishlist ->
-                        val wishlistColor = when (WishlistStatus.valueOf(wishlist)) {
-                            WishlistStatus.WISH -> MaterialTheme.colorScheme.secondary
-                            WishlistStatus.ON_THE_WAY -> MaterialTheme.colorScheme.tertiary
-                            WishlistStatus.OBTAINED -> MaterialTheme.colorScheme.primary
-                        }
-                        StatusChip(text = wishlist.replace("_", " "), color = wishlistColor)
+                        StatusChip(
+                            text = when (wishlist) {
+                                "WISH" -> "Wishlist"
+                                "ON_THE_WAY" -> "On the way"
+                                "OBTAINED" -> "Obtained"
+                                else -> wishlist
+                            },
+                            color = MaterialTheme.colorScheme.secondary
+                        )
                     }
                 }
             }
@@ -364,14 +416,13 @@ private fun LocalBookCard(
 private fun GoogleBookCard(
     searchResult: SearchResult,
     searchQuery: String,
+    onBookClick: () -> Unit, // NEW: Make whole card clickable
     onAddToLibrary: (SearchResult) -> Unit
 ) {
     ElevatedCard(
+        onClick = onBookClick, // NEW: Make whole card clickable
         modifier = Modifier.fillMaxWidth(),
-        elevation = CardDefaults.elevatedCardElevation(defaultElevation = 2.dp),
-        colors = CardDefaults.elevatedCardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
-        )
+        elevation = CardDefaults.elevatedCardElevation(defaultElevation = 1.dp)
     ) {
         Row(
             modifier = Modifier
@@ -380,7 +431,6 @@ private fun GoogleBookCard(
             verticalAlignment = Alignment.Top
         ) {
             Column(modifier = Modifier.weight(1f)) {
-                // Title and source
                 Row(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
@@ -443,7 +493,7 @@ private fun GoogleBookCard(
                     modifier = Modifier.size(16.dp)
                 )
                 Spacer(Modifier.width(4.dp))
-                Text("Add", style = MaterialTheme.typography.labelSmall)
+                Text("Add")
             }
         }
     }
@@ -456,14 +506,13 @@ private fun SourceChip(
 ) {
     Surface(
         shape = MaterialTheme.shapes.small,
-        color = color.copy(alpha = 0.1f),
-        modifier = Modifier
+        color = color.copy(alpha = 0.1f)
     ) {
         Text(
             text = text,
             style = MaterialTheme.typography.labelSmall,
             color = color,
-            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
         )
     }
 }
@@ -475,50 +524,71 @@ private fun StatusChip(
 ) {
     Surface(
         shape = MaterialTheme.shapes.small,
-        color = color.copy(alpha = 0.1f),
-        modifier = Modifier.padding(top = 8.dp)
+        color = color.copy(alpha = 0.1f)
     ) {
         Text(
             text = text,
             style = MaterialTheme.typography.labelSmall,
             color = color,
-            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
         )
     }
 }
 
 @Composable
-private fun EmptySearchState() {
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(32.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
-    ) {
-        Icon(
-            Icons.Default.Search,
-            contentDescription = null,
-            modifier = Modifier.size(72.dp),
-            tint = MaterialTheme.colorScheme.outline
-        )
+private fun AddGoogleBookDialog(
+    book: Book,
+    onDismiss: () -> Unit,
+    onConfirm: (WishlistStatus) -> Unit
+) {
+    var selectedWishlistStatus by remember { mutableStateOf(WishlistStatus.WISH) }
 
-        Spacer(Modifier.height(16.dp))
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Add to Library") },
+        text = {
+            Column {
+                Text(
+                    text = "Add \"${book.title}\" to your library?",
+                    modifier = Modifier.padding(bottom = 16.dp)
+                )
 
-        Text(
-            text = "Search your library and Google Books",
-            style = MaterialTheme.typography.headlineSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            textAlign = TextAlign.Center
-        )
+                Text(
+                    text = "Wishlist Status:",
+                    style = MaterialTheme.typography.labelMedium,
+                    modifier = Modifier.padding(bottom = 8.dp)
+                )
 
-        Spacer(Modifier.height(8.dp))
-
-        Text(
-            text = "Find books by title, author, or saga.\nResults include your library and Google Books!",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            textAlign = TextAlign.Center
-        )
-    }
+                WishlistStatus.entries.forEach { status ->
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.padding(vertical = 4.dp)
+                    ) {
+                        RadioButton(
+                            selected = selectedWishlistStatus == status,
+                            onClick = { selectedWishlistStatus = status }
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            text = when (status) {
+                                WishlistStatus.WISH -> "Wishlist"
+                                WishlistStatus.ON_THE_WAY -> "On the way"
+                                WishlistStatus.OBTAINED -> "Obtained"
+                            }
+                        )
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = { onConfirm(selectedWishlistStatus) }) {
+                Text("Add Book")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel")
+            }
+        }
+    )
 }

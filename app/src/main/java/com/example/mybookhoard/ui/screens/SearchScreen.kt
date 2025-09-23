@@ -15,6 +15,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.example.mybookhoard.BooksVm
+import com.example.mybookhoard.api.SearchResult
 import com.example.mybookhoard.data.Book
 import com.example.mybookhoard.ui.components.SearchBar
 import com.example.mybookhoard.ui.components.SearchResults
@@ -23,7 +24,8 @@ import com.example.mybookhoard.ui.components.SearchResults
 fun SearchScreen(
     vm: BooksVm,
     onNavigateBack: () -> Unit,
-    onBookClick: (Book) -> Unit
+    onBookClick: (Book) -> Unit,
+    onGoogleBookClick: (SearchResult) -> Unit = {} // NEW: For Google Book navigation
 ) {
     var showFullResults by remember { mutableStateOf(false) }
     var searchExecuted by remember { mutableStateOf(false) }
@@ -50,6 +52,7 @@ fun SearchScreen(
                 SearchResults(
                     vm = vm,
                     onBookClick = onBookClick,
+                    onGoogleBookClick = onGoogleBookClick, // NEW: Pass the callback
                     modifier = Modifier.fillMaxSize()
                 )
             }

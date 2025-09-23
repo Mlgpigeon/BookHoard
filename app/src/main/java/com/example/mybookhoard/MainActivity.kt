@@ -19,6 +19,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.example.mybookhoard.api.AuthState
 import com.example.mybookhoard.api.ConnectionState
+import com.example.mybookhoard.api.SearchResult
 import com.example.mybookhoard.ui.screens.*
 
 class MainActivity : ComponentActivity() {
@@ -112,13 +113,13 @@ sealed class Screen {
     object Library : Screen()
     object Add : Screen()
     object Sync : Screen()
-    object Search : Screen()  // NUEVA PANTALLA DE BÚSQUEDA
+    object Search : Screen()
     object Profile : Screen()
     object Settings : Screen()
     data class BookDetail(val bookId: Long) : Screen()
     data class EditBook(val bookId: Long) : Screen()
+    data class GoogleBookDetail(val googleBook: SearchResult) : Screen() // NEW
 }
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MainAppScreen(
@@ -147,6 +148,14 @@ fun MainAppScreen(
                 bookId = screen.bookId,
                 vm = vm,
                 onNavigateBack = { currentScreen = Screen.Library }
+            )
+        }
+        is Screen.GoogleBookDetail -> { // NEW
+            GoogleBookDetailScreen(
+                googleBook = screen.googleBook,
+                vm = vm,
+                onNavigateBack = { currentScreen = Screen.Search },
+                onBookAdded = { currentScreen = Screen.Library }
             )
         }
         else -> {
@@ -178,7 +187,6 @@ fun MainAppScreen(
                                 icon = { Icon(Icons.Filled.Add, contentDescription = "Add") },
                                 label = { Text("Add") }
                             )
-                            // NUEVA: Búsqueda en navegación inferior (como Instagram)
                             NavigationBarItem(
                                 selected = screen == Screen.Search,
                                 onClick = { currentScreen = Screen.Search },
@@ -205,7 +213,8 @@ fun MainAppScreen(
                         Screen.Search -> SearchScreen(
                             vm = vm,
                             onNavigateBack = { currentScreen = Screen.Library },
-                            onBookClick = { book -> currentScreen = Screen.BookDetail(book.id) }
+                            onBookClick = { book -> currentScreen = Screen.BookDetail(book.id) },
+                            onGoogleBookClick = { googleBook -> currentScreen = Screen.GoogleBookDetail(googleBook) } // NEW
                         )
                         Screen.Sync -> {
                             CloudSyncScreen(
@@ -214,11 +223,9 @@ fun MainAppScreen(
                                 connectionState = connectionState
                             )
                         }
-
-                        is Screen.BookDetail, is Screen.EditBook -> {
+                        is Screen.BookDetail, is Screen.EditBook, is Screen.GoogleBookDetail -> { // UPDATE
                             // These cases are handled above
                         }
-
                         Screen.Profile -> {
                             ProfileScreen(
                                 vm = vm,
@@ -230,7 +237,7 @@ fun MainAppScreen(
                         Screen.Settings -> {
                             SettingsScreen(
                                 onNavigateBack = { currentScreen = Screen.Profile },
-                                onNavigateToBackup = { currentScreen = Screen.Sync }
+                                onNavigateToBackup = { currentScreen = Screen.Sync } // ← AGREGADO
                             )
                         }
                     }
@@ -238,6 +245,8 @@ fun MainAppScreen(
             }
         }
     }
+
+
 }
 
 @Composable
