@@ -372,6 +372,59 @@ class ApiService(private val context: Context) {
             "Unable to connect to server. Please check your internet connection."
         }
     }
+
+    suspend fun searchBooksWithGoogleBooks(query: String, limit: Int = 20): ApiResult<CombinedSearchResponse> {
+        val encodedQuery = java.net.URLEncoder.encode(query, "UTF-8")
+        val endpoint = "books/search-google?q=$encodedQuery&limit=$limit&include_google=true"
+
+        val response = makeRequest(endpoint, "GET")
+        return if (response.isSuccessful()) {
+            try {
+                val json = JSONObject(response.body)
+                val data = json.getJSONObject("data")
+                val results = data.getJSONObject("results")
+
+                // Parse local results
+                val localResults = mutableListOf<SearchResult>()
+                if (results.has("local") && !results.isNull("local")) {
+                    val localArray = results.getJSONArray("local")
+                    for (i in 0 until localArray.length()) {
+                        val bookJson = localArray.getJSONObject(i)
+                        val apiBook = ApiBook.fromJson(bookJson)
+                        localResults.add(SearchResult.fromLocalBook(apiBook.toLocalBook()))
+                    }
+                }
+
+                // Parse Google Books results
+                val googleResults = mutableListOf<SearchResult>()
+                if (results.has("google_books") && !results.isNull("google_books")) {
+                    val googleArray = results.getJSONArray("google_books")
+                    for (i in 0 until googleArray.length()) {
+                        val googleBookJson = googleArray.getJSONObject(i)
+                        googleResults.add(SearchResult.fromGoogleBook(googleBookJson))
+                    }
+                }
+
+                val response = CombinedSearchResponse(
+                    localResults = localResults,
+                    googleResults = googleResults,
+                    totalLocal = data.optInt("total_local", localResults.size),
+                    totalGoogle = data.optInt("total_google", googleResults.size),
+                    query = query
+                )
+
+                Log.d(TAG, "Search completed: ${response.totalLocal} local, ${response.totalGoogle} Google Books")
+                ApiResult.Success(response)
+
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to parse search results: ${e.message}")
+                ApiResult.Error("Failed to parse search results: ${e.message}")
+            }
+        } else {
+            ApiResult.Error(parseError(response.body))
+        }
+    }
+
 }
 
 data class ApiResponse(val code: Int, val body: String) {

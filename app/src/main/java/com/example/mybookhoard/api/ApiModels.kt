@@ -145,3 +145,76 @@ sealed class AuthState {
     data class Authenticated(val user: User, val token: String) : AuthState()
     data class Error(val message: String) : AuthState()
 }
+
+// Add to app/src/main/java/com/example/mybookhoard/api/ApiModels.kt
+
+// Search result that can contain both local and Google Books results
+data class SearchResult(
+    val id: Long? = null,
+    val title: String,
+    val author: String? = null,
+    val saga: String? = null,
+    val description: String? = null,
+    val source: String = "local", // "local" or "google_books_api"
+    val sourceLabel: String = "Local",
+    val googleBooksId: String? = null,
+    val status: String? = null, // Only for local books
+    val wishlist: String? = null, // Only for local books
+    val isInLibrary: Boolean = false // True if this Google Books result is already in user's library
+) {
+    companion object {
+        fun fromLocalBook(book: Book): SearchResult {
+            return SearchResult(
+                id = book.id,
+                title = book.title,
+                author = book.author,
+                saga = book.saga,
+                description = book.description,
+                source = "local",
+                sourceLabel = "Your Library",
+                status = book.status.name,
+                wishlist = book.wishlist?.name,
+                isInLibrary = true
+            )
+        }
+
+        fun fromGoogleBook(json: JSONObject): SearchResult {
+            return SearchResult(
+                title = json.getString("title"),
+                author = json.optString("author", null),
+                saga = json.optString("saga", null),
+                description = json.optString("description", null),
+                source = json.optString("source", "google_books_api"),
+                sourceLabel = json.optString("source_label", "Google Books"),
+                googleBooksId = json.optString("google_books_id", null),
+                isInLibrary = false
+            )
+        }
+    }
+
+    fun toApiBook(): ApiBook {
+        return ApiBook(
+            id = id,
+            title = title,
+            author = author,
+            saga = saga,
+            description = description,
+            status = status ?: "NOT_STARTED"
+        )
+    }
+}
+
+// Combined search response
+data class CombinedSearchResponse(
+    val localResults: List<SearchResult>,
+    val googleResults: List<SearchResult>,
+    val totalLocal: Int,
+    val totalGoogle: Int,
+    val query: String
+) {
+    val allResults: List<SearchResult>
+        get() = localResults + googleResults
+
+    val totalResults: Int
+        get() = localResults.size + googleResults.size
+}

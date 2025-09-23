@@ -21,7 +21,8 @@ data class Book(
 enum class ReadingStatus {
     NOT_STARTED, // sin comenzar
     READING,     // leyendo
-    READ         // leído
+    READ,         // leído
+    ABANDONED
 }
 
 enum class WishlistStatus {

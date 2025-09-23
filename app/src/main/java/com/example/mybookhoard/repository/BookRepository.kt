@@ -482,6 +482,28 @@ class BookRepository(private val context: Context) {
         }
     }
 
+    // Search books including Google Books API
+    suspend fun searchBooksWithGoogleBooks(query: String): ApiResult<CombinedSearchResponse> {
+        return try {
+            Log.d(TAG, "Searching books with Google Books: '$query'")
+            val result = apiService.searchBooksWithGoogleBooks(query)
+
+            when (result) {
+                is ApiResult.Success -> {
+                    Log.d(TAG, "Search successful: ${result.data.totalLocal} local, ${result.data.totalGoogle} Google Books")
+                    result
+                }
+                is ApiResult.Error -> {
+                    Log.e(TAG, "Search failed: ${result.message}")
+                    result
+                }
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Search exception: ${e.message}")
+            ApiResult.Error("Search failed: ${e.message}")
+        }
+    }
+
     private fun isAuthenticated(): Boolean {
         return _authState.value is AuthState.Authenticated
     }

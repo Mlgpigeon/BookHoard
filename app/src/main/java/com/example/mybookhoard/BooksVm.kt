@@ -57,6 +57,10 @@ class BooksVm(app: Application) : AndroidViewModel(app) {
     fun searchAuthorSuggestions(query: String) = searchVm.searchAuthorSuggestions(query)
     fun searchSagaSuggestions(query: String) = searchVm.searchSagaSuggestions(query)
 
+    fun searchWithGoogleBooks(query: String) = searchVm.searchWithGoogleBooks(query)
+    fun clearGoogleSearch() = searchVm.clearGoogleSearch()
+    fun getCombinedResults() = searchVm.getCombinedResults()
+
     // Sync methods delegation
     fun syncFromServer() = syncVm.syncFromServer()
     fun syncToServer() = syncVm.syncToServer()
@@ -155,4 +159,15 @@ class BooksVm(app: Application) : AndroidViewModel(app) {
     fun getBookById(id: Long): Flow<Book?> {
         return repository.getBookById(id)
     }
+
+
+
+    // Google Books search functionality
+    val googleSearchResults: StateFlow<List<SearchResult>> = searchVm.googleSearchResults
+    val isSearchingGoogle: StateFlow<Boolean> = searchVm.isSearchingGoogle
+    val searchError: StateFlow<String?> = searchVm.searchError
+    val combinedSearchResults = searchVm.combinedSearchResults
+
+
+
 }
