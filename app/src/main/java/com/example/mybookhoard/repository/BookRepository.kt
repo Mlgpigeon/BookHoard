@@ -10,11 +10,13 @@ import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
 
 class BookRepository(private val context: Context) {
 
     companion object {
         private const val TAG = "BookRepository"
+        private const val SESSION_VERIFICATION_INTERVAL = 24 * 60 * 60 * 1000L // 24 hours
     }
 
     private val apiService = ApiService(context)
@@ -28,46 +30,118 @@ class BookRepository(private val context: Context) {
     val authState: StateFlow<AuthState> = _authState
 
     init {
-        // Initialize auth state by verifying stored token
+        // Initialize auth state by checking saved session
         initializeAuthState()
     }
 
     private fun initializeAuthState() {
         repositoryScope.launch {
-            val token = apiService.getAuthToken()
-            if (token != null) {
-                Log.d(TAG, "Found stored token, verifying...")
-                _authState.value = AuthState.Authenticating
+            Log.d(TAG, "Initializing auth state...")
 
-                // Verify token by getting profile
-                try {
-                    when (val result = apiService.getProfile()) {
-                        is ApiResult.Success -> {
-                            Log.d(TAG, "Token is valid, user: ${result.data.username}")
-                            _authState.value = AuthState.Authenticated(result.data, token)
-                            _connectionState.value = ConnectionState.Online
-                            // Sync data after successful auth verification
-                            syncFromServer()
-                        }
-                        is ApiResult.Error -> {
-                            Log.w(TAG, "Token verification failed: ${result.message}")
-                            // Token is invalid, clear it and set as not authenticated
-                            apiService.clearAuthToken()
-                            _authState.value = AuthState.NotAuthenticated
-                            _connectionState.value = ConnectionState.Offline
-                        }
-                    }
-                } catch (e: Exception) {
-                    Log.e(TAG, "Error verifying token: ${e.message}")
-                    // Network error or other issue, assume offline but keep token
-                    _authState.value = AuthState.NotAuthenticated
-                    _connectionState.value = ConnectionState.Error("Unable to verify authentication: ${e.message}")
-                }
-            } else {
-                Log.d(TAG, "No stored token found")
+            if (!apiService.hasValidSession()) {
+                Log.d(TAG, "No valid session found")
                 _authState.value = AuthState.NotAuthenticated
                 _connectionState.value = ConnectionState.Offline
+                return@launch
             }
+
+            val savedUser = apiService.getSavedUser()
+            val token = apiService.getAuthToken()
+
+            if (savedUser == null || token == null) {
+                Log.w(TAG, "Incomplete session data, clearing")
+                apiService.clearUserSession()
+                _authState.value = AuthState.NotAuthenticated
+                _connectionState.value = ConnectionState.Offline
+                return@launch
+            }
+
+            Log.d(TAG, "Found saved session for user: ${savedUser.username}")
+
+            // Set authenticated state immediately with saved data
+            _authState.value = AuthState.Authenticated(savedUser, token)
+            _connectionState.value = ConnectionState.Offline
+
+            // Check if we need to verify the session (if it's been a while)
+            val lastSync = apiService.getLastSyncTime()
+            val shouldVerify = System.currentTimeMillis() - lastSync > SESSION_VERIFICATION_INTERVAL
+
+            if (shouldVerify) {
+                Log.d(TAG, "Session verification needed, checking with server...")
+                verifyAndRefreshSession(savedUser, token)
+            } else {
+                Log.d(TAG, "Session recently verified, using cached data")
+                // Still try to sync in background but don't change auth state
+                backgroundSync()
+            }
+        }
+    }
+
+    private suspend fun verifyAndRefreshSession(savedUser: User, token: String) {
+        try {
+            when (val result = apiService.getProfile()) {
+                is ApiResult.Success -> {
+                    Log.d(TAG, "Session verified successfully")
+                    _authState.value = AuthState.Authenticated(result.data, token)
+                    _connectionState.value = ConnectionState.Online
+                    // Sync data after successful verification
+                    syncFromServer()
+                }
+                is ApiResult.Error -> {
+                    if (result.message.contains("401") || result.message.contains("unauthorized", ignoreCase = true)) {
+                        Log.w(TAG, "Session expired, need to re-authenticate")
+                        apiService.clearUserSession()
+                        _authState.value = AuthState.NotAuthenticated
+                        _connectionState.value = ConnectionState.Offline
+                    } else {
+                        Log.w(TAG, "Session verification failed due to network: ${result.message}")
+                        // Keep user authenticated but mark as offline/error
+                        _authState.value = AuthState.Authenticated(savedUser, token)
+                        _connectionState.value = ConnectionState.Error("Unable to verify session: ${result.message}")
+                        // Retry verification later
+                        scheduleSessionRetry()
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error verifying session: ${e.message}")
+            // Keep user authenticated but mark as offline
+            _authState.value = AuthState.Authenticated(savedUser, token)
+            _connectionState.value = ConnectionState.Error("Network error: ${e.message}")
+            scheduleSessionRetry()
+        }
+    }
+
+    private fun scheduleSessionRetry() {
+        repositoryScope.launch {
+            delay(30_000) // Retry after 30 seconds
+            val currentAuth = _authState.value
+            if (currentAuth is AuthState.Authenticated && _connectionState.value is ConnectionState.Error) {
+                Log.d(TAG, "Retrying session verification...")
+                verifyAndRefreshSession(currentAuth.user, currentAuth.token)
+            }
+        }
+    }
+
+    private suspend fun backgroundSync() {
+        try {
+            _connectionState.value = ConnectionState.Syncing
+            val result = apiService.getBooks()
+            when (result) {
+                is ApiResult.Success -> {
+                    val serverBooks = result.data.map { it.toLocalBook() }
+                    localDao.upsertAll(serverBooks)
+                    _connectionState.value = ConnectionState.Online
+                    Log.d(TAG, "Background sync successful: ${serverBooks.size} books")
+                }
+                is ApiResult.Error -> {
+                    _connectionState.value = ConnectionState.Error(result.message)
+                    Log.w(TAG, "Background sync failed: ${result.message}")
+                }
+            }
+        } catch (e: Exception) {
+            _connectionState.value = ConnectionState.Error(e.message ?: "Network error")
+            Log.e(TAG, "Background sync error: ${e.message}")
         }
     }
 
@@ -81,6 +155,8 @@ class BookRepository(private val context: Context) {
                 Log.d(TAG, "Registration successful")
                 _authState.value = AuthState.Authenticated(result.user, result.token)
                 _connectionState.value = ConnectionState.Online
+                // Sync data after successful registration
+                syncFromServer()
                 result
             }
             is AuthResult.Error -> {
@@ -135,35 +211,40 @@ class BookRepository(private val context: Context) {
         return apiService.getProfile()
     }
 
+    // Session management
+    fun hasValidSession(): Boolean {
+        return apiService.hasValidSession() && _authState.value is AuthState.Authenticated
+    }
+
+    fun refreshSession() {
+        if (hasValidSession()) {
+            val currentAuth = _authState.value
+            if (currentAuth is AuthState.Authenticated) {
+                repositoryScope.launch {
+                    verifyAndRefreshSession(currentAuth.user, currentAuth.token)
+                }
+            }
+        }
+    }
+
     // Book data methods
     fun getAllBooks(): Flow<List<Book>> {
         return if (isAuthenticated()) {
-            // If authenticated, try to keep data synced
+            // If authenticated, use local data and sync in background
             flow {
+                // Emit local data first
                 val localBooks = localDao.all().first()
                 emit(localBooks)
 
-                // Try to sync in background only if we're not already syncing
-                if (_connectionState.value !is ConnectionState.Syncing) {
+                // Try to sync in background if not already syncing and online
+                if (_connectionState.value !is ConnectionState.Syncing && _connectionState.value is ConnectionState.Online) {
                     try {
-                        _connectionState.value = ConnectionState.Syncing
-                        val apiResult = apiService.getBooks()
-                        when (apiResult) {
-                            is ApiResult.Success -> {
-                                val serverBooks = apiResult.data.map { it.toLocalBook() }
-                                localDao.upsertAll(serverBooks)
-                                _connectionState.value = ConnectionState.Online
-                                emit(serverBooks)
-                                Log.d(TAG, "Background sync successful: ${serverBooks.size} books")
-                            }
-                            is ApiResult.Error -> {
-                                _connectionState.value = ConnectionState.Error(apiResult.message)
-                                Log.w(TAG, "Background sync failed: ${apiResult.message}")
-                            }
-                        }
+                        backgroundSync()
+                        // Emit updated data after sync
+                        val updatedBooks = localDao.all().first()
+                        emit(updatedBooks)
                     } catch (e: Exception) {
-                        _connectionState.value = ConnectionState.Error(e.message ?: "Network error")
-                        Log.e(TAG, "Background sync error: ${e.message}")
+                        Log.e(TAG, "Background sync in getAllBooks failed: ${e.message}")
                     }
                 }
             }.flowOn(Dispatchers.IO)
@@ -390,7 +471,14 @@ class BookRepository(private val context: Context) {
 
     fun clearConnectionError() {
         if (_connectionState.value is ConnectionState.Error) {
-            _connectionState.value = ConnectionState.Offline
+            val currentAuth = _authState.value
+            if (currentAuth is AuthState.Authenticated) {
+                _connectionState.value = ConnectionState.Offline
+                // Try to reconnect
+                refreshSession()
+            } else {
+                _connectionState.value = ConnectionState.Offline
+            }
         }
     }
 

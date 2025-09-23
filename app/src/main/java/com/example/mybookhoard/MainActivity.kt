@@ -25,14 +25,17 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // Import initial data only if not authenticated
-        vm.importFromAssetsOnce(this)
-
         setContent {
             MaterialTheme {
                 AppContent(vm)
             }
         }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        // Refresh session when app comes to foreground
+        vm.refreshSessionIfNeeded()
     }
 }
 
@@ -41,11 +44,34 @@ fun AppContent(vm: BooksVm) {
     val authState by vm.authState.collectAsState()
     val connectionState by vm.connectionState.collectAsState()
 
+    // Import initial data only if offline and no local data
+    LaunchedEffect(authState) {
+        vm.importFromAssetsIfNeeded()
+    }
+
     // Create local variable for smart cast
     val currentAuthState = authState
 
     when (currentAuthState) {
-        is AuthState.NotAuthenticated, is AuthState.Error -> {
+        is AuthState.NotAuthenticated -> {
+            AuthScreen(
+                authState = currentAuthState,
+                onLogin = { identifier, password ->
+                    vm.login(identifier, password)
+                },
+                onRegister = { username, email, password ->
+                    vm.register(username, email, password)
+                },
+                onClearError = {
+                    vm.clearAuthError()
+                },
+                onRetry = {
+                    vm.retryNetworkOperation()
+                }
+            )
+        }
+
+        is AuthState.Error -> {
             AuthScreen(
                 authState = currentAuthState,
                 onLogin = { identifier, password ->

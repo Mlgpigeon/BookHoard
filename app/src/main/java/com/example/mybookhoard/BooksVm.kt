@@ -492,4 +492,118 @@ class BooksVm(app: Application) : AndroidViewModel(app) {
             else -> null
         }
     }
+    // Session management methods
+
+    fun refreshSessionIfNeeded() {
+        viewModelScope.launch {
+            try {
+                Log.d(TAG, "Checking if session refresh is needed...")
+                repository.refreshSession()
+            } catch (e: Exception) {
+                Log.e(TAG, "Error refreshing session: ${e.message}", e)
+            }
+        }
+    }
+
+    fun importFromAssetsIfNeeded() {
+        viewModelScope.launch {
+            try {
+                // Only import if:
+                // 1. Not authenticated OR
+                // 2. Authenticated but no local data
+                val shouldImport = when (authState.value) {
+                    is AuthState.NotAuthenticated -> {
+                        val current = items.firstOrNull() ?: emptyList()
+                        current.isEmpty()
+                    }
+                    is AuthState.Authenticated -> {
+                        // Don't import if authenticated, let sync handle it
+                        false
+                    }
+                    else -> false
+                }
+
+                if (shouldImport) {
+                    Log.d(TAG, "Importing initial data from assets (offline mode)")
+                    val context = getApplication<Application>().applicationContext
+                    val csv = context.assets.open("libros_iniciales.csv")
+                        .bufferedReader().use { it.readText() }
+                    val books = parseCsv(csv)
+                    repository.replaceAllBooks(books)
+                    Log.d(TAG, "Imported ${books.size} books from assets")
+                } else {
+                    Log.d(TAG, "Skipping asset import - not needed")
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error importing from assets: ${e.message}", e)
+            }
+        }
+    }
+
+    // Session status helpers
+    fun hasValidSession(): Boolean {
+        return repository.hasValidSession()
+    }
+
+    fun getSessionUser(): User? {
+        return when (val state = authState.value) {
+            is AuthState.Authenticated -> state.user
+            else -> null
+        }
+    }
+
+    // Enhanced connection handling
+    fun retryConnectionWithBackoff() {
+        viewModelScope.launch {
+            Log.d(TAG, "Retrying connection with exponential backoff...")
+
+            val delays = listOf(1000L, 2000L, 5000L, 10000L) // Exponential backoff
+
+            for (delay in delays) {
+                delay(delay)
+
+                if (isAuthenticated()) {
+                    syncFromServer()
+                    if (isOnline()) {
+                        Log.d(TAG, "Connection restored successfully")
+                        break
+                    }
+                } else {
+                    testConnection()
+                    if (connectionState.value !is ConnectionState.Error) {
+                        Log.d(TAG, "Connection test successful")
+                        break
+                    }
+                }
+
+                Log.d(TAG, "Retry attempt failed, waiting ${delay}ms before next attempt")
+            }
+        }
+    }
+
+    // Session validation (call periodically)
+    fun validateSession() {
+        if (isAuthenticated()) {
+            viewModelScope.launch {
+                try {
+                    val result = repository.getProfile()
+                    when (result) {
+                        is ApiResult.Success -> {
+                            Log.d(TAG, "Session validation successful")
+                        }
+                        is ApiResult.Error -> {
+                            Log.w(TAG, "Session validation failed: ${result.message}")
+                            if (result.message.contains("401") ||
+                                result.message.contains("unauthorized", ignoreCase = true)) {
+                                // Session expired, force logout
+                                logout()
+                            }
+                        }
+                    }
+                } catch (e: Exception) {
+                    Log.e(TAG, "Session validation error: ${e.message}")
+                }
+            }
+        }
+    }
 }

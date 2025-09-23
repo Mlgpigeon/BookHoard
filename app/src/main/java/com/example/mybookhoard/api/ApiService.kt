@@ -23,6 +23,13 @@ class ApiService(private val context: Context) {
         private const val BASE_URL = "https://api.mybookhoard.com/api"
         private const val PREFS_NAME = "bookhoard_auth"
         private const val TOKEN_KEY = "auth_token"
+        private const val USER_ID_KEY = "user_id"
+        private const val USERNAME_KEY = "username"
+        private const val EMAIL_KEY = "email"
+        private const val USER_ROLE_KEY = "user_role"
+        private const val CREATED_AT_KEY = "created_at"
+        private const val IS_ACTIVE_KEY = "is_active"
+        private const val LAST_SYNC_KEY = "last_sync"
         private const val TAG = "ApiService"
 
         // Timeout constants
@@ -41,6 +48,70 @@ class ApiService(private val context: Context) {
 
     fun clearAuthToken() {
         prefs.edit().remove(TOKEN_KEY).apply()
+    }
+
+    // User persistence methods
+    fun saveUser(user: User, token: String) {
+        prefs.edit().apply {
+            putString(TOKEN_KEY, token)
+            putLong(USER_ID_KEY, user.id)
+            putString(USERNAME_KEY, user.username)
+            putString(EMAIL_KEY, user.email)
+            putString(USER_ROLE_KEY, user.role)
+            putString(CREATED_AT_KEY, user.createdAt)
+            putBoolean(IS_ACTIVE_KEY, user.isActive)
+            putLong(LAST_SYNC_KEY, System.currentTimeMillis())
+            apply()
+        }
+        Log.d(TAG, "User session saved: ${user.username}")
+    }
+
+    fun getSavedUser(): User? {
+        return try {
+            val id = prefs.getLong(USER_ID_KEY, -1)
+            if (id == -1L) return null
+
+            User(
+                id = id,
+                username = prefs.getString(USERNAME_KEY, "") ?: "",
+                email = prefs.getString(EMAIL_KEY, "") ?: "",
+                role = prefs.getString(USER_ROLE_KEY, "user") ?: "user",
+                createdAt = prefs.getString(CREATED_AT_KEY, "") ?: "",
+                isActive = prefs.getBoolean(IS_ACTIVE_KEY, true)
+            )
+        } catch (e: Exception) {
+            Log.e(TAG, "Error retrieving saved user: ${e.message}")
+            null
+        }
+    }
+
+    fun clearUserSession() {
+        prefs.edit().apply {
+            remove(TOKEN_KEY)
+            remove(USER_ID_KEY)
+            remove(USERNAME_KEY)
+            remove(EMAIL_KEY)
+            remove(USER_ROLE_KEY)
+            remove(CREATED_AT_KEY)
+            remove(IS_ACTIVE_KEY)
+            remove(LAST_SYNC_KEY)
+            apply()
+        }
+        Log.d(TAG, "User session cleared")
+    }
+
+    fun hasValidSession(): Boolean {
+        val token = getAuthToken()
+        val user = getSavedUser()
+        return token != null && user != null
+    }
+
+    fun getLastSyncTime(): Long {
+        return prefs.getLong(LAST_SYNC_KEY, 0)
+    }
+
+    fun updateLastSyncTime() {
+        prefs.edit().putLong(LAST_SYNC_KEY, System.currentTimeMillis()).apply()
     }
 
     private suspend fun makeRequest(
@@ -136,7 +207,7 @@ class ApiService(private val context: Context) {
 
     suspend fun logout(): ApiResult<Unit> {
         val response = makeRequest("auth/logout", "POST")
-        clearAuthToken()
+        clearUserSession()
         return if (response.isSuccessful()) {
             ApiResult.Success(Unit)
         } else {
@@ -151,12 +222,24 @@ class ApiService(private val context: Context) {
                 val json = JSONObject(response.body)
                 val userData = json.getJSONObject("data").getJSONObject("user")
                 val user = User.fromJson(userData)
+
+                // Update saved user data with fresh info
+                val token = getAuthToken()
+                if (token != null) {
+                    saveUser(user, token)
+                }
+
                 ApiResult.Success(user)
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to parse user data: ${e.message}")
                 ApiResult.Error("Failed to parse user data: ${e.message}")
             }
         } else {
+            // If profile request fails with 401, clear session
+            if (response.code == 401) {
+                Log.w(TAG, "Token expired, clearing session")
+                clearUserSession()
+            }
             ApiResult.Error(parseError(response.body))
         }
     }
@@ -186,6 +269,7 @@ class ApiService(private val context: Context) {
                 for (i in 0 until booksArray.length()) {
                     books.add(ApiBook.fromJson(booksArray.getJSONObject(i)))
                 }
+                updateLastSyncTime()
                 ApiResult.Success(books)
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to parse books: ${e.message}")
@@ -269,7 +353,7 @@ class ApiService(private val context: Context) {
                 val userData = data.getJSONObject("user")
                 val user = User.fromJson(userData)
 
-                setAuthToken(token)
+                saveUser(user, token)
                 AuthResult.Success(user, token)
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to parse auth response: ${e.message}")
