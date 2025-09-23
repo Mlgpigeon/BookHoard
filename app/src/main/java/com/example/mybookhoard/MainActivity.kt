@@ -6,10 +6,9 @@ import androidx.activity.compose.setContent
 import androidx.activity.viewModels
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AccountCircle
+import androidx.compose.material.icons.filled.MenuBook
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CloudSync
-import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -108,9 +107,8 @@ fun LoadingScreen(message: String = "Loading...") {
 }
 
 sealed class Screen {
-    object Books : Screen()
+    object Library : Screen()
     object Add : Screen()
-    object Wishlist : Screen()
     object Sync : Screen()
     object Profile : Screen()
     data class BookDetail(val bookId: Long) : Screen()
@@ -124,7 +122,7 @@ fun MainAppScreen(
     authState: AuthState.Authenticated,
     connectionState: ConnectionState
 ) {
-    var currentScreen by remember { mutableStateOf<Screen>(Screen.Books) }
+    var currentScreen by remember { mutableStateOf<Screen>(Screen.Library) }
 
     // Store current screen value to enable smart cast
     val screen = currentScreen
@@ -134,7 +132,7 @@ fun MainAppScreen(
             BookDetailScreen(
                 bookId = screen.bookId,
                 vm = vm,
-                onNavigateBack = { currentScreen = Screen.Books },
+                onNavigateBack = { currentScreen = Screen.Library },
                 onEditBook = { book ->
                     currentScreen = Screen.EditBook(book.id)
                 }
@@ -144,7 +142,7 @@ fun MainAppScreen(
             EditBookScreen(
                 bookId = screen.bookId,
                 vm = vm,
-                onNavigateBack = { currentScreen = Screen.Books }
+                onNavigateBack = { currentScreen = Screen.Library }
             )
         }
         else -> {
@@ -165,27 +163,21 @@ fun MainAppScreen(
                     BottomAppBar {
                         NavigationBar {
                             NavigationBarItem(
-                                selected = screen == Screen.Books,
-                                onClick = { currentScreen = Screen.Books },
-                                icon = { Icon(Icons.Default.AccountCircle, contentDescription = "Books") },
-                                label = { Text("Books") }
+                                selected = screen == Screen.Library,
+                                onClick = { currentScreen = Screen.Library },
+                                icon = { Icon(Icons.Filled.MenuBook, contentDescription = "Library") },
+                                label = { Text("Library") }
                             )
                             NavigationBarItem(
                                 selected = screen == Screen.Add,
                                 onClick = { currentScreen = Screen.Add },
-                                icon = { Icon(Icons.Default.Add, contentDescription = "Add") },
+                                icon = { Icon(Icons.Filled.Add, contentDescription = "Add") },
                                 label = { Text("Add") }
-                            )
-                            NavigationBarItem(
-                                selected = screen == Screen.Wishlist,
-                                onClick = { currentScreen = Screen.Wishlist },
-                                icon = { Icon(Icons.Default.Star, contentDescription = "Wishlist") },
-                                label = { Text("Wishlist") }
                             )
                             NavigationBarItem(
                                 selected = screen == Screen.Sync,
                                 onClick = { currentScreen = Screen.Sync },
-                                icon = { Icon(Icons.Default.CloudSync, contentDescription = "Sync") },
+                                icon = { Icon(Icons.Filled.CloudSync, contentDescription = "Sync") },
                                 label = { Text("Sync") }
                             )
                         }
@@ -194,15 +186,11 @@ fun MainAppScreen(
             ) { paddings ->
                 Box(Modifier.padding(paddings)) {
                     when (screen) {
-                        Screen.Books -> BooksScreen(
+                        Screen.Library -> LibraryScreen(
                             vm = vm,
                             onBookClick = { book -> currentScreen = Screen.BookDetail(book.id) }
                         )
                         Screen.Add -> AddBookScreen(vm)
-                        Screen.Wishlist -> WishlistScreen(
-                            vm = vm,
-                            onBookClick = { book -> currentScreen = Screen.BookDetail(book.id) }
-                        )
                         Screen.Sync -> {
                             CloudSyncScreen(
                                 vm = vm,
@@ -219,7 +207,7 @@ fun MainAppScreen(
                             ProfileScreen(
                                 vm = vm,
                                 user = authState.user,
-                                onNavigateBack = { currentScreen = Screen.Books }
+                                onNavigateBack = { currentScreen = Screen.Library }
                             )
                         }
                     }
@@ -237,7 +225,7 @@ fun ConnectionIndicator(
     when (connectionState) {
         is ConnectionState.Online -> {
             Icon(
-                Icons.Default.CloudSync,
+                Icons.Filled.CloudSync,
                 contentDescription = "Online",
                 tint = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.size(20.dp)
@@ -249,7 +237,7 @@ fun ConnectionIndicator(
                 modifier = Modifier.size(32.dp)
             ) {
                 Icon(
-                    Icons.Default.CloudSync,
+                    Icons.Filled.CloudSync,
                     contentDescription = "Offline - Tap to retry",
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.size(20.dp)
@@ -268,7 +256,7 @@ fun ConnectionIndicator(
                 modifier = Modifier.size(32.dp)
             ) {
                 Icon(
-                    Icons.Default.CloudSync,
+                    Icons.Filled.CloudSync,
                     contentDescription = "Sync Error - Tap to retry",
                     tint = MaterialTheme.colorScheme.error,
                     modifier = Modifier.size(20.dp)
