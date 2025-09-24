@@ -8,11 +8,13 @@ import androidx.lifecycle.viewModelScope
 import com.example.mybookhoard.api.*
 import com.example.mybookhoard.data.*
 import com.example.mybookhoard.repository.BookRepository
+import com.example.mybookhoard.repository.UserBookRepository
 import com.example.mybookhoard.viewmodels.AuthVm
 import com.example.mybookhoard.viewmodels.SearchVm
 import com.example.mybookhoard.viewmodels.SyncVm
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import java.util.Date
 
 class BooksVm(app: Application) : AndroidViewModel(app) {
 
@@ -21,6 +23,8 @@ class BooksVm(app: Application) : AndroidViewModel(app) {
     }
 
     private val repository = BookRepository(app)
+
+    private val userBookRepository = UserBookRepository(app)
 
     // Modular ViewModels
     val authVm = AuthVm(repository)
@@ -101,26 +105,313 @@ class BooksVm(app: Application) : AndroidViewModel(app) {
         author: String? = null,
         saga: String? = null,
         description: String? = null,
-        wishlistStatus: WishlistStatus
+        wishlistStatus: WishlistStatus  // Keep existing parameter name for compatibility
     ) {
         viewModelScope.launch {
             try {
-                Log.d(TAG, "Adding Google Book: $title with wishlist status: ${wishlistStatus.name}")
+                Log.d(TAG, "Adding Google Book as UserBook: $title with wishlist status: ${wishlistStatus.name}")
 
-                val result = repository.addGoogleBook(title, author, saga, description, wishlistStatus)
-                when (result) {
-                    is ApiResult.Success -> {
-                        Log.d(TAG, "Google Book added successfully: $title")
-                        // The book will automatically appear in the UI through the repository flow
-                    }
-                    is ApiResult.Error -> {
-                        Log.e(TAG, "Failed to add Google Book: ${result.message}")
-                        // TODO: Show error message to user
-                    }
+                val currentUser = getCurrentUser()
+                if (currentUser == null) {
+                    Log.e(TAG, "Cannot add book: User not authenticated")
+                    return@launch
+                }
+
+                // Convert WishlistStatus to UserBookWishlistStatus
+                val userBookWishlistStatus = when (wishlistStatus) {
+                    WishlistStatus.WISH -> UserBookWishlistStatus.WISH
+                    WishlistStatus.ON_THE_WAY -> UserBookWishlistStatus.ON_THE_WAY
+                    WishlistStatus.OBTAINED -> UserBookWishlistStatus.OBTAINED
+                }
+
+                val success = userBookRepository.addGoogleBookAsUserBook(
+                    title = title,
+                    author = author,
+                    saga = saga,
+                    description = description,
+                    wishlistStatus = userBookWishlistStatus
+                )
+
+                if (success) {
+                    Log.d(TAG, "Google Book added successfully as UserBook: $title")
+                    // The UserBook will automatically appear in the UI through the repository flow
+                } else {
+                    Log.e(TAG, "Failed to add Google Book as UserBook: $title")
+                    // TODO: Show error message to user
                 }
 
             } catch (e: Exception) {
-                Log.e(TAG, "Error adding Google Book '$title': ${e.message}", e)
+                Log.e(TAG, "Error adding Google Book '$title' as UserBook: ${e.message}", e)
+            }
+        }
+    }
+
+    fun getUserBooks(): Flow<List<UserBook>> {
+        val currentUser = getCurrentUser()
+        return if (currentUser != null) {
+            userBookRepository.getUserBooks(currentUser.id)
+        } else {
+            flowOf(emptyList())
+        }
+    }
+
+    fun getAllUserBooks(): Flow<List<UserBook>> {
+        return userBookRepository.getAllUserBooks()
+    }
+
+    fun getUserBookById(userBookId: Long): Flow<UserBook?> {
+        val currentUser = getCurrentUser()
+        return if (currentUser != null) {
+            userBookRepository.getUserBookById(userBookId, currentUser.id)
+        } else {
+            flowOf(null)
+        }
+    }
+
+    fun updateUserBookStatus(userBook: UserBook, status: UserBookReadingStatus) {
+        viewModelScope.launch {
+            try {
+                Log.d(TAG, "Updating UserBook status: ${userBook.id} to ${status.name}")
+                val updated = userBook.copy(
+                    readingStatus = status,
+                    updatedAt = Date()
+                )
+                val success = userBookRepository.updateUserBook(updated)
+                if (success) {
+                    Log.d(TAG, "UserBook status updated successfully")
+                } else {
+                    Log.w(TAG, "UserBook status update failed")
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error updating UserBook status: ${e.message}", e)
+            }
+        }
+    }
+
+    fun updateUserBookWishlist(userBook: UserBook, status: UserBookWishlistStatus?) {
+        viewModelScope.launch {
+            try {
+                Log.d(TAG, "Updating UserBook wishlist: ${userBook.id} to ${status?.name}")
+                val updated = userBook.copy(
+                    wishlistStatus = status,
+                    updatedAt = Date()
+                )
+                val success = userBookRepository.updateUserBook(updated)
+                if (success) {
+                    Log.d(TAG, "UserBook wishlist updated successfully")
+                } else {
+                    Log.w(TAG, "UserBook wishlist update failed")
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error updating UserBook wishlist: ${e.message}", e)
+            }
+        }
+    }
+
+    fun updateUserBookRating(userBook: UserBook, rating: Int?) {
+        viewModelScope.launch {
+            try {
+                Log.d(TAG, "Updating UserBook rating: ${userBook.id} to $rating")
+                val updated = userBook.copy(
+                    personalRating = rating,
+                    updatedAt = Date()
+                )
+                val success = userBookRepository.updateUserBook(updated)
+                if (success) {
+                    Log.d(TAG, "UserBook rating updated successfully")
+                } else {
+                    Log.w(TAG, "UserBook rating update failed")
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error updating UserBook rating: ${e.message}", e)
+            }
+        }
+    }
+
+    fun updateUserBookProgress(userBook: UserBook, progress: Int) {
+        viewModelScope.launch {
+            try {
+                Log.d(TAG, "Updating UserBook progress: ${userBook.id} to $progress%")
+                val updated = userBook.copy(
+                    readingProgress = progress.coerceIn(0, 100),
+                    updatedAt = Date()
+                )
+                val success = userBookRepository.updateUserBook(updated)
+                if (success) {
+                    Log.d(TAG, "UserBook progress updated successfully")
+                } else {
+                    Log.w(TAG, "UserBook progress update failed")
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error updating UserBook progress: ${e.message}", e)
+            }
+        }
+    }
+
+    fun updateUserBookReview(userBook: UserBook, review: String?) {
+        viewModelScope.launch {
+            try {
+                Log.d(TAG, "Updating UserBook review: ${userBook.id}")
+                val updated = userBook.copy(
+                    review = review?.takeIf { it.isNotBlank() },
+                    updatedAt = Date()
+                )
+                val success = userBookRepository.updateUserBook(updated)
+                if (success) {
+                    Log.d(TAG, "UserBook review updated successfully")
+                } else {
+                    Log.w(TAG, "UserBook review update failed")
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error updating UserBook review: ${e.message}", e)
+            }
+        }
+    }
+
+    fun toggleUserBookFavorite(userBook: UserBook) {
+        viewModelScope.launch {
+            try {
+                val updated = userBook.copy(
+                    favorite = !userBook.favorite,
+                    updatedAt = Date()
+                )
+                val success = userBookRepository.updateUserBook(updated)
+                if (success) {
+                    Log.d(TAG, "UserBook favorite toggled successfully: ${updated.favorite}")
+                } else {
+                    Log.w(TAG, "UserBook favorite toggle failed")
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error toggling UserBook favorite: ${e.message}", e)
+            }
+        }
+    }
+
+    fun deleteUserBook(userBook: UserBook) {
+        viewModelScope.launch {
+            try {
+                Log.d(TAG, "Deleting UserBook: ${userBook.id}")
+                val success = userBookRepository.deleteUserBook(userBook)
+                if (success) {
+                    Log.d(TAG, "UserBook deleted successfully")
+                } else {
+                    Log.w(TAG, "UserBook deletion failed")
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error deleting UserBook: ${e.message}", e)
+            }
+        }
+    }
+
+    // UserBook search and filter methods
+    fun getUserBooksByStatus(status: UserBookReadingStatus): Flow<List<UserBook>> {
+        val currentUser = getCurrentUser()
+        return if (currentUser != null) {
+            userBookRepository.getUserBooksByStatus(currentUser.id, status)
+        } else {
+            flowOf(emptyList())
+        }
+    }
+
+    fun getUserBooksByWishlistStatus(status: UserBookWishlistStatus): Flow<List<UserBook>> {
+        val currentUser = getCurrentUser()
+        return if (currentUser != null) {
+            userBookRepository.getUserBooksByWishlistStatus(currentUser.id, status)
+        } else {
+            flowOf(emptyList())
+        }
+    }
+
+    fun searchUserBooks(query: String): Flow<List<UserBook>> {
+        val currentUser = getCurrentUser()
+        return if (currentUser != null) {
+            userBookRepository.searchUserBooks(currentUser.id, query)
+        } else {
+            flowOf(emptyList())
+        }
+    }
+
+    fun getFavoriteUserBooks(): Flow<List<UserBook>> {
+        val currentUser = getCurrentUser()
+        return if (currentUser != null) {
+            userBookRepository.getFavoriteUserBooks(currentUser.id)
+        } else {
+            flowOf(emptyList())
+        }
+    }
+
+    fun getCurrentlyReadingBooks(): Flow<List<UserBook>> {
+        val currentUser = getCurrentUser()
+        return if (currentUser != null) {
+            userBookRepository.getCurrentlyReading(currentUser.id)
+        } else {
+            flowOf(emptyList())
+        }
+    }
+
+    // UserBook sync methods
+    fun syncUserBooksFromServer() {
+        viewModelScope.launch {
+            try {
+                Log.d(TAG, "Starting UserBook sync from server")
+                val result = userBookRepository.syncFromServer()
+                when (result) {
+                    is SyncResult.Success -> {
+                        Log.d(TAG, "UserBook sync from server completed successfully")
+                    }
+                    is SyncResult.Error -> {
+                        Log.e(TAG, "UserBook sync from server failed: ${result.message}")
+                    }
+                    is SyncResult.Partial -> {
+                        Log.w(TAG, "UserBook sync from server partial: ${result.message}")
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error syncing UserBooks from server: ${e.message}", e)
+            }
+        }
+    }
+
+    fun syncUserBooksToServer() {
+        viewModelScope.launch {
+            try {
+                Log.d(TAG, "Starting UserBook sync to server")
+                val result = userBookRepository.syncToServer()
+                when (result) {
+                    is SyncResult.Success -> {
+                        Log.d(TAG, "UserBook sync to server completed successfully")
+                    }
+                    is SyncResult.Error -> {
+                        Log.e(TAG, "UserBook sync to server failed: ${result.message}")
+                    }
+                    is SyncResult.Partial -> {
+                        Log.w(TAG, "UserBook sync to server partial: ${result.message}")
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error syncing UserBooks to server: ${e.message}", e)
+            }
+        }
+    }
+
+    fun fullUserBookSync() {
+        viewModelScope.launch {
+            try {
+                Log.d(TAG, "Starting full UserBook sync")
+                val result = userBookRepository.fullSync()
+                when (result) {
+                    is SyncResult.Success -> {
+                        Log.d(TAG, "Full UserBook sync completed successfully")
+                    }
+                    is SyncResult.Error -> {
+                        Log.e(TAG, "Full UserBook sync failed: ${result.message}")
+                    }
+                    is SyncResult.Partial -> {
+                        Log.w(TAG, "Full UserBook sync partial: ${result.message}")
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error in full UserBook sync: ${e.message}", e)
             }
         }
     }

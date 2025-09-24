@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.SharedPreferences
 import android.util.Log
 import com.example.mybookhoard.data.Book
+import com.example.mybookhoard.data.UserBookWishlistStatus
 import com.example.mybookhoard.data.WishlistStatus
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -459,6 +460,93 @@ class ApiService(private val context: Context) {
                 Log.e(TAG, "Failed to parse created book: ${e.message}")
                 ApiResult.Error("Failed to parse created book: ${e.message}")
             }
+        } else {
+            ApiResult.Error(parseError(response.body))
+        }
+    }
+
+    suspend fun addGoogleBookAsUserBook(
+        title: String,
+        author: String? = null,
+        saga: String? = null,
+        description: String? = null,
+        wishlistStatus: UserBookWishlistStatus
+    ): ApiResult<ApiUserBook> {
+        val requestBody = JSONObject().apply {
+            put("title", title)
+            author?.let { put("author", it) }
+            saga?.let { put("saga", it) }
+            description?.let { put("description", it) }
+            put("source", "google_books_api")
+            put("wishlist", wishlistStatus.name)
+            put("status", "NOT_STARTED")
+        }
+
+        val response = makeRequest("books/add-google-book", "POST", requestBody)
+        return if (response.isSuccessful()) {
+            try {
+                val json = JSONObject(response.body)
+                val userBookData = json.getJSONObject("data").getJSONObject("book")
+                val apiUserBook = ApiUserBook.fromJson(userBookData)
+                ApiResult.Success(apiUserBook)
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to parse UserBook response: ${e.message}")
+                ApiResult.Error("Failed to parse response: ${e.message}")
+            }
+        } else {
+            ApiResult.Error(parseError(response.body))
+        }
+    }
+
+    suspend fun getUserBooks(limit: Int = 50, offset: Int = 0): ApiResult<List<ApiUserBook>> {
+        val endpoint = "books?limit=$limit&offset=$offset"
+        val response = makeRequest(endpoint, "GET")
+
+        return if (response.isSuccessful()) {
+            try {
+                val json = JSONObject(response.body)
+                val booksArray = json.getJSONObject("data").getJSONArray("books")
+                val userBooks = mutableListOf<ApiUserBook>()
+
+                for (i in 0 until booksArray.length()) {
+                    val bookJson = booksArray.getJSONObject(i)
+                    userBooks.add(ApiUserBook.fromJson(bookJson))
+                }
+
+                ApiResult.Success(userBooks)
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to parse user books: ${e.message}")
+                ApiResult.Error("Failed to parse user books: ${e.message}")
+            }
+        } else {
+            ApiResult.Error(parseError(response.body))
+        }
+    }
+
+    suspend fun updateUserBook(userBookId: Long, updateData: Map<String, Any?>): ApiResult<ApiUserBook> {
+        val requestBody = JSONObject(updateData as Map<*, *>)
+        val response = makeRequest("books/$userBookId", "PUT", requestBody)
+
+        return if (response.isSuccessful()) {
+            try {
+                val json = JSONObject(response.body)
+                val userBookData = json.getJSONObject("data").getJSONObject("book")
+                val apiUserBook = ApiUserBook.fromJson(userBookData)
+                ApiResult.Success(apiUserBook)
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to parse updated UserBook: ${e.message}")
+                ApiResult.Error("Failed to parse response: ${e.message}")
+            }
+        } else {
+            ApiResult.Error(parseError(response.body))
+        }
+    }
+
+    suspend fun deleteUserBook(userBookId: Long): ApiResult<Unit> {
+        val response = makeRequest("books/$userBookId", "DELETE")
+
+        return if (response.isSuccessful()) {
+            ApiResult.Success(Unit)
         } else {
             ApiResult.Error(parseError(response.body))
         }

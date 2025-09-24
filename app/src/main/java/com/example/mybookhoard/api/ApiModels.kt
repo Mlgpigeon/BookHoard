@@ -2,8 +2,12 @@ package com.example.mybookhoard.api
 
 import com.example.mybookhoard.data.Book
 import com.example.mybookhoard.data.ReadingStatus
+import com.example.mybookhoard.data.UserBook
+import com.example.mybookhoard.data.UserBookReadingStatus
+import com.example.mybookhoard.data.UserBookWishlistStatus
 import com.example.mybookhoard.data.WishlistStatus
 import org.json.JSONObject
+import java.util.Date
 
 data class User(
     val id: Long,
@@ -202,6 +206,82 @@ data class SearchResult(
             status = status ?: "NOT_STARTED"
         )
     }
+}
+data class ApiUserBook(
+    val id: Long,
+    val userId: Long,
+    val bookId: Long,
+    val title: String,
+    val author: String? = null,
+    val saga: String? = null,
+    val description: String? = null,
+    val readingStatus: String = "NOT_STARTED",
+    val wishlistStatus: String? = null,
+    val personalRating: Int? = null,
+    val review: String? = null,
+    val readingProgress: Int = 0,
+    val favorite: Boolean = false,
+    val createdAt: String,
+    val updatedAt: String
+) {
+    companion object {
+        fun fromJson(json: JSONObject): ApiUserBook {
+            return ApiUserBook(
+                id = json.getLong("id"),
+                userId = json.getLong("user_id"),
+                bookId = json.getLong("book_id"),
+                title = json.getString("title"),
+                author = json.optString("author").takeIf { it.isNotEmpty() },
+                saga = json.optString("saga").takeIf { it.isNotEmpty() },
+                description = json.optString("description").takeIf { it.isNotEmpty() },
+                readingStatus = json.getString("reading_status"),
+                wishlistStatus = json.optString("wishlist_status").takeIf { it.isNotEmpty() },
+                personalRating = if (json.isNull("personal_rating")) null else json.optInt("personal_rating"),
+                review = json.optString("review").takeIf { it.isNotEmpty() },
+                readingProgress = json.optInt("reading_progress", 0),
+                favorite = json.optBoolean("favorite", false),
+                createdAt = json.getString("created_at"),
+                updatedAt = json.getString("updated_at")
+            )
+        }
+    }
+
+    fun toLocalUserBook(): UserBook {
+        return UserBook(
+            id = id,
+            userId = userId,
+            bookId = bookId,
+            readingStatus = UserBookReadingStatus.valueOf(readingStatus),
+            wishlistStatus = wishlistStatus?.let { UserBookWishlistStatus.valueOf(it) },
+            personalRating = personalRating,
+            review = review,
+            readingProgress = readingProgress,
+            favorite = favorite,
+            createdAt = parseDate(createdAt),
+            updatedAt = parseDate(updatedAt)
+        )
+    }
+
+    private fun parseDate(dateString: String): Date {
+        return try {
+            java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", java.util.Locale.US).parse(dateString) ?: Date()
+        } catch (e: Exception) {
+            Date()
+        }
+    }
+}
+
+// Add this extension to the existing SearchResult
+fun SearchResult.toUserBookCreationData(userId: Long, wishlistStatus: UserBookWishlistStatus): Map<String, Any?> {
+    return mapOf(
+        "title" to title,
+        "author" to author,
+        "saga" to saga,
+        "description" to description,
+        "source" to source,
+        "wishlist" to wishlistStatus.name,
+        "status" to "NOT_STARTED"
+    )
 }
 
 // Combined search response

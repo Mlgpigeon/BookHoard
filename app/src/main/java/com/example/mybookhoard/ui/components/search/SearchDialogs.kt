@@ -16,7 +16,7 @@ import com.example.mybookhoard.api.SearchResult
 fun AddGoogleBookDialog(
     searchResult: SearchResult,
     onDismiss: () -> Unit,
-    onConfirm: (WishlistStatus) -> Unit,
+    onConfirm: (WishlistStatus) -> Unit, // Keep existing signature for compatibility
     modifier: Modifier = Modifier
 ) {
     var selectedWishlistStatus by remember { mutableStateOf(WishlistStatus.WISH) }
@@ -31,10 +31,19 @@ fun AddGoogleBookDialog(
                     modifier = Modifier.padding(bottom = 16.dp)
                 )
 
+                if (!searchResult.author.isNullOrBlank()) {
+                    Text(
+                        text = "by ${searchResult.author}",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(bottom = 8.dp)
+                    )
+                }
+
                 Text(
                     text = "Wishlist Status:",
                     style = MaterialTheme.typography.labelMedium,
-                    modifier = Modifier.padding(bottom = 8.dp)
+                    modifier = Modifier.padding(bottom = 8.dp, top = 8.dp)
                 )
 
                 WishlistStatus.entries.forEach { status ->
@@ -60,7 +69,7 @@ fun AddGoogleBookDialog(
         },
         confirmButton = {
             TextButton(onClick = { onConfirm(selectedWishlistStatus) }) {
-                Text("Add Book")
+                Text("Add to Library")
             }
         },
         dismissButton = {
