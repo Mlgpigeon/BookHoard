@@ -18,7 +18,7 @@ import com.example.mybookhoard.BooksVm
 import com.example.mybookhoard.api.SearchResult
 import com.example.mybookhoard.data.Book
 import com.example.mybookhoard.ui.components.SearchBar
-import com.example.mybookhoard.ui.components.SearchResults
+import com.example.mybookhoard.ui.components.search.SearchResults
 
 @Composable
 fun SearchScreen(
