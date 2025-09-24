@@ -4,6 +4,8 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -13,6 +15,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import com.example.mybookhoard.BooksVm
 import com.example.mybookhoard.data.Book
@@ -90,9 +93,7 @@ fun SearchBar(
                 trailingIcon = {
                     Row {
                         if (searchQuery.isNotBlank()) {
-                            IconButton(
-                                onClick = { vm.clearSearch() }
-                            ) {
+                            IconButton(onClick = { vm.clearSearch() }) {
                                 Icon(
                                     Icons.Default.Clear,
                                     contentDescription = "Clear",
@@ -124,8 +125,21 @@ fun SearchBar(
                     unfocusedBorderColor = MaterialTheme.colorScheme.outline
                 ),
                 shape = RoundedCornerShape(12.dp),
-                singleLine = true
+                singleLine = true,
+                keyboardOptions = KeyboardOptions.Default.copy(
+                    imeAction = ImeAction.Search
+                ),
+                keyboardActions = KeyboardActions(
+                    onSearch = {
+                        if (searchQuery.isNotBlank()) {
+                            showSuggestions = false
+                            focusManager.clearFocus()
+                            onSearchExecuted()
+                        }
+                    }
+                )
             )
+
         }
 
         // Live suggestions
