@@ -6,21 +6,36 @@ import androidx.room.RoomDatabase
 import androidx.room.Database
 import androidx.room.TypeConverters
 
-@Database(entities = [Book::class], version = 4)
-@TypeConverters(Converters::class)
+@Database(
+    entities = [
+        Book::class,
+        UserBook::class
+    ],
+    version = 5,
+    exportSchema = false
+)
+@TypeConverters(
+    Converters::class,
+    UserBookConverters::class
+)
 abstract class AppDb : RoomDatabase() {
     abstract fun bookDao(): BookDao
+    abstract fun userBookDao(): UserBookDao
 
     companion object {
         @Volatile private var I: AppDb? = null
+
         fun get(ctx: Context): AppDb =
             I ?: synchronized(this) {
                 I ?: Room.databaseBuilder(ctx, AppDb::class.java, DB_NAME)
-                    .fallbackToDestructiveMigration() // 👈 borra y recrea si cambia el esquema
+                    .fallbackToDestructiveMigration() // For development - remove in production
                     .build().also { I = it }
             }
 
-        fun closeDb() { I?.close(); I = null }
+        fun closeDb() {
+            I?.close()
+            I = null
+        }
 
         const val DB_NAME = "bookhoard.db"
     }
