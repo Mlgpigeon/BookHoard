@@ -331,7 +331,7 @@ fun LiveBookRow(
                         )
                     },
                     onClick = {
-                        vm.deleteBook(book)
+                        vm.deleteUserBookByBookId(book.id)
                         menuExpanded = false
                     }
                 )

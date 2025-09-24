@@ -188,6 +188,36 @@ class BooksVm(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    fun deleteUserBookByBookId(bookId: Long) {
+        viewModelScope.launch {
+            try {
+                val currentUserId = authVm.getCurrentUser()?.id
+                if (currentUserId == null) {
+                    Log.w(TAG, "Cannot delete UserBook: no authenticated user")
+                    return@launch
+                }
+
+                Log.d(TAG, "Finding UserBook for bookId: $bookId, userId: $currentUserId")
+
+                // Get the UserBook by bookId and userId
+                userBookRepository.getUserBookByBookId(currentUserId, bookId).firstOrNull()?.let { userBook ->
+                    Log.d(TAG, "Deleting UserBook: ${userBook.id} for book: $bookId")
+                    val success = userBookRepository.deleteUserBook(userBook)
+                    if (success) {
+                        Log.d(TAG, "UserBook deleted successfully from server and local DB")
+                    } else {
+                        Log.w(TAG, "UserBook deleted locally only due to network issues")
+                    }
+                } ?: run {
+                    Log.w(TAG, "UserBook not found for bookId: $bookId, userId: $currentUserId")
+                }
+
+            } catch (e: Exception) {
+                Log.e(TAG, "Error deleting UserBook for bookId $bookId: ${e.message}", e)
+            }
+        }
+    }
+
     fun updateUserBookWishlist(userBook: UserBook, status: UserBookWishlistStatus?) {
         viewModelScope.launch {
             try {

@@ -137,7 +137,8 @@ class UserBookRepository(private val context: Context) {
             true
         }
     }
-
+    fun getUserBookByBookId(userId: Long, bookId: Long): Flow<UserBook?> =
+        localUserBookDao.getUserBookByBookId(userId, bookId)
     suspend fun deleteUserBook(userBook: UserBook): Boolean = withContext(Dispatchers.IO) {
         return@withContext if (authStateManager.isAuthenticated()) {
             // Delete from server first (following BookRepository pattern)
