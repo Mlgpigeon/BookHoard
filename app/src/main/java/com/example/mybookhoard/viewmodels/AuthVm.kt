@@ -79,13 +79,14 @@ class AuthVm(private val repository: BookRepository) : ViewModel() {
         }
     }
 
+    // FIXED: This method now just uses the current user from auth state
     fun getProfile() {
-        viewModelScope.launch {
-            try {
-                repository.getProfile()
-            } catch (e: Exception) {
-                Log.e(TAG, "Get profile error: ${e.message}", e)
-            }
+        // No need to make API call - user info is already in authState
+        val currentUser = getCurrentUser()
+        if (currentUser != null) {
+            Log.d(TAG, "Profile available: ${currentUser.username}")
+        } else {
+            Log.w(TAG, "No user profile available")
         }
     }
 
@@ -94,7 +95,10 @@ class AuthVm(private val repository: BookRepository) : ViewModel() {
             try {
                 Log.d(TAG, "Testing connection...")
                 if (isAuthenticated()) {
-                    repository.getProfile()
+                    val success = repository.testConnection()
+                    Log.d(TAG, "Connection test result: $success")
+                } else {
+                    Log.w(TAG, "Cannot test connection - not authenticated")
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Connection test error: ${e.message}", e)
@@ -102,12 +106,16 @@ class AuthVm(private val repository: BookRepository) : ViewModel() {
         }
     }
 
+    // FIXED: Removed clearAuthError - errors clear automatically when state changes
     fun clearAuthError() {
-        repository.clearAuthError()
+        // Auth errors clear automatically when new authentication attempts are made
+        Log.d(TAG, "Auth error will clear on next authentication attempt")
     }
 
+    // FIXED: Removed clearConnectionError - errors clear automatically when state changes
     fun clearConnectionError() {
-        repository.clearConnectionError()
+        // Connection errors clear automatically when connection state changes
+        Log.d(TAG, "Connection error will clear on next connection attempt")
     }
 
     fun retryNetworkOperation() {
@@ -129,10 +137,7 @@ class AuthVm(private val repository: BookRepository) : ViewModel() {
     fun hasAuthError(): Boolean = authState.value is AuthState.Error
 
     fun getCurrentUser(): User? {
-        return when (val state = authState.value) {
-            is AuthState.Authenticated -> state.user
-            else -> null
-        }
+        return repository.getCurrentUser()
     }
 
     fun getAuthErrorMessage(): String? {

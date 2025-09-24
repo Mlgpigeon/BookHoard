@@ -64,7 +64,7 @@ class SyncVm(private val repository: BookRepository) : ViewModel() {
         }
     }
 
-    // Bulk operations
+    // FIXED: Bulk operations using the new replaceAllBooks method
     fun replaceAll(list: List<Book>) {
         viewModelScope.launch {
             try {
@@ -84,70 +84,108 @@ class SyncVm(private val repository: BookRepository) : ViewModel() {
                 // Only import if not authenticated and no local data
                 if (!authVm.isAuthenticated()) {
                     val current = repository.getAllBooks().firstOrNull() ?: emptyList()
+
                     if (current.isEmpty()) {
-                        Log.d(TAG, "Importing initial data from assets")
-                        val csv = ctx.assets.open("libros_iniciales.csv")
-                            .bufferedReader().use { it.readText() }
-                        val books = parseCsv(csv)
-                        repository.replaceAllBooks(books)
-                        Log.d(TAG, "Imported ${books.size} books from assets")
+                        Log.d(TAG, "No local books found, importing from assets...")
+                        importFromAssets(ctx)
+                    } else {
+                        Log.d(TAG, "Local books exist (${current.size}), skipping asset import")
                     }
+                } else {
+                    Log.d(TAG, "User authenticated, skipping asset import")
                 }
             } catch (e: Exception) {
-                Log.e(TAG, "Error importing from assets: ${e.message}", e)
+                Log.e(TAG, "Error in importFromAssetsOnce: ${e.message}", e)
             }
         }
     }
 
-    // CSV parsing (kept for local imports)
-    private fun parseCsv(csv: String): List<Book> {
-        return try {
-            val reader = csvReader {
+    // FIXED: Added missing importFromAssets method
+    private suspend fun importFromAssets(ctx: Context) {
+        try {
+            val inputStream = ctx.assets.open("libros_iniciales.csv")
+            val csvData = csvReader {
+                delimiter = ','
                 skipEmptyLine = true
-                autoRenameDuplicateHeaders = true
-            }
-            val rows = reader.readAllWithHeader(csv.byteInputStream())
+                escapeChar = '"'
+            }.readAllWithHeader(inputStream)
 
-            rows.mapNotNull { r ->
+            Log.d(TAG, "CSV loaded with ${csvData.size} rows")
+
+            val books = csvData.mapNotNull { row ->
                 try {
-                    val title = r["Title"]?.trim().orEmpty()
-                    if (title.isBlank()) return@mapNotNull null
+                    val title = row["title"]?.trim()
+                    val author = row["author"]?.trim()
+                    val status = row["status"]?.trim()
+                    val wishlistStr = row["wishlist"]?.trim()
 
-                    val readStr = r["Read"]?.trim()?.lowercase().orEmpty()
-                    val saga = r["Saga"]?.trim().orEmpty().ifBlank { null }
-                    val author = r["Author"]?.trim().orEmpty().ifBlank { null }
-                    val description = r["Description"]?.trim().orEmpty().ifBlank { null }
+                    if (title.isNullOrBlank()) {
+                        Log.w(TAG, "Skipping row with empty title: $row")
+                        return@mapNotNull null
+                    }
 
-                    val status = when (readStr) {
-                        "leyendo", "reading" -> ReadingStatus.READING
-                        "read", "true", "1", "sí", "si", "x", "✓", "✔" -> ReadingStatus.READ
+                    val readingStatus = when (status?.uppercase()) {
+                        "READ", "LEIDO", "LEÍDO" -> ReadingStatus.READ
+                        "READING", "LEYENDO" -> ReadingStatus.READING
                         else -> ReadingStatus.NOT_STARTED
                     }
 
-                    val wishlistStr = r["Wishlist"]?.trim()?.uppercase().orEmpty()
-                    val wishlistStatus = when (wishlistStr) {
-                        "WISH" -> WishlistStatus.WISH
-                        "ON_THE_WAY" -> WishlistStatus.ON_THE_WAY
-                        "OBTAINED" -> WishlistStatus.OBTAINED
+                    val wishlistStatus = when (wishlistStr?.uppercase()) {
+                        "WISH", "DESEO" -> WishlistStatus.WISH
+                        "ON_THE_WAY", "EN_CAMINO" -> WishlistStatus.ON_THE_WAY
+                        "OBTAINED", "OBTENIDO" -> WishlistStatus.OBTAINED
                         else -> null
                     }
 
                     Book(
                         title = title,
-                        author = author,
-                        saga = saga,
-                        description = description,
-                        status = status,
+                        author = author.takeIf { !it.isNullOrBlank() },
+                        saga = row["saga"]?.trim().takeIf { !it.isNullOrBlank() },
+                        description = row["description"]?.trim().takeIf { !it.isNullOrBlank() },
+                        status = readingStatus,
                         wishlist = wishlistStatus
                     )
                 } catch (e: Exception) {
-                    Log.w(TAG, "Error parsing CSV row: ${e.message}")
+                    Log.e(TAG, "Error parsing CSV row: $row - ${e.message}")
                     null
                 }
             }
+
+            Log.d(TAG, "Parsed ${books.size} valid books from CSV")
+
+            if (books.isNotEmpty()) {
+                replaceAll(books)
+                Log.d(TAG, "Asset import completed successfully")
+            } else {
+                Log.w(TAG, "No valid books found in CSV")
+            }
+
+            inputStream.close()
         } catch (e: Exception) {
-            Log.e(TAG, "Error parsing CSV: ${e.message}", e)
-            emptyList()
+            Log.e(TAG, "Error importing from assets: ${e.message}", e)
+        }
+    }
+
+    // Helper method for full sync (bidirectional)
+    fun fullSync() {
+        viewModelScope.launch {
+            try {
+                Log.d(TAG, "Starting full sync")
+                val result = repository.fullSync()
+                when (result) {
+                    is SyncResult.Success -> {
+                        Log.d(TAG, "Full sync successful")
+                    }
+                    is SyncResult.Error -> {
+                        Log.e(TAG, "Full sync failed: ${result.message}")
+                    }
+                    is SyncResult.Partial -> {
+                        Log.w(TAG, "Full sync partial: ${result.message}")
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Full sync error: ${e.message}", e)
+            }
         }
     }
 }

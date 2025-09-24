@@ -4,247 +4,73 @@ import android.content.Context
 import android.util.Log
 import com.example.mybookhoard.api.*
 import com.example.mybookhoard.data.*
-import com.example.mybookhoard.utils.FuzzySearchUtils
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.delay
 
+/**
+ * Main repository coordinator that delegates to specialized services
+ */
 class BookRepository(private val context: Context) {
 
     companion object {
         private const val TAG = "BookRepository"
-        private const val SESSION_VERIFICATION_INTERVAL = 24 * 60 * 60 * 1000L // 24 hours
     }
 
+    // Core services
     private val apiService = ApiService(context)
     private val localDao = AppDb.get(context).bookDao()
+
+    // Specialized service managers
+    private val authStateManager = AuthStateManager(context, apiService)
+    private val connectionStateManager = ConnectionStateManager(context, apiService, authStateManager)
+    private val searchService = BookSearchService(context, localDao)
+    private val syncService = BookSyncService(context, apiService, localDao, authStateManager, connectionStateManager)
+
     private val repositoryScope = CoroutineScope(Dispatchers.IO)
 
-    private val _connectionState = MutableStateFlow<ConnectionState>(ConnectionState.Offline)
-    val connectionState: StateFlow<ConnectionState> = _connectionState
+    // Public state flows
+    val connectionState: StateFlow<ConnectionState> = connectionStateManager.connectionState
+    val authState: StateFlow<AuthState> = authStateManager.authState
 
-    private val _authState = MutableStateFlow<AuthState>(AuthState.NotAuthenticated)
-    val authState: StateFlow<AuthState> = _authState
-
-    init {
-        // Initialize auth state by checking saved session
-        initializeAuthState()
+    // Authentication operations
+    suspend fun login(username: String, password: String): AuthResult {
+        return authStateManager.login(username, password)
     }
 
-    private fun initializeAuthState() {
-        repositoryScope.launch {
-            Log.d(TAG, "Initializing auth state...")
-
-            if (!apiService.hasValidSession()) {
-                Log.d(TAG, "No valid session found")
-                _authState.value = AuthState.NotAuthenticated
-                _connectionState.value = ConnectionState.Offline
-                return@launch
-            }
-
-            val savedUser = apiService.getSavedUser()
-            val token = apiService.getAuthToken()
-
-            if (savedUser == null || token == null) {
-                Log.w(TAG, "Incomplete session data, clearing")
-                apiService.clearUserSession()
-                _authState.value = AuthState.NotAuthenticated
-                _connectionState.value = ConnectionState.Offline
-                return@launch
-            }
-
-            Log.d(TAG, "Found saved session for user: ${savedUser.username}")
-
-            // Set authenticated state immediately with saved data
-            _authState.value = AuthState.Authenticated(savedUser, token)
-            _connectionState.value = ConnectionState.Offline
-
-            // Check if we need to verify the session (if it's been a while)
-            val lastSync = apiService.getLastSyncTime()
-            val shouldVerify = System.currentTimeMillis() - lastSync > SESSION_VERIFICATION_INTERVAL
-
-            if (shouldVerify) {
-                Log.d(TAG, "Session verification needed, checking with server...")
-                verifyAndRefreshSession(savedUser, token)
-            } else {
-                Log.d(TAG, "Session recently verified, using cached data")
-                // Still try to sync in background but don't change auth state
-                backgroundSync()
-            }
-        }
-    }
-
-    private suspend fun verifyAndRefreshSession(savedUser: User, token: String) {
-        try {
-            when (val result = apiService.getProfile()) {
-                is ApiResult.Success -> {
-                    Log.d(TAG, "Session verified successfully")
-                    _authState.value = AuthState.Authenticated(result.data, token)
-                    _connectionState.value = ConnectionState.Online
-                    // Sync data after successful verification
-                    syncFromServer()
-                }
-                is ApiResult.Error -> {
-                    if (result.message.contains("401") || result.message.contains("unauthorized", ignoreCase = true)) {
-                        Log.w(TAG, "Session expired, need to re-authenticate")
-                        apiService.clearUserSession()
-                        _authState.value = AuthState.NotAuthenticated
-                        _connectionState.value = ConnectionState.Offline
-                    } else {
-                        Log.w(TAG, "Session verification failed due to network: ${result.message}")
-                        // Keep user authenticated but mark as offline/error
-                        _authState.value = AuthState.Authenticated(savedUser, token)
-                        _connectionState.value = ConnectionState.Error("Unable to verify session: ${result.message}")
-                        // Retry verification later
-                        scheduleSessionRetry()
-                    }
-                }
-            }
-        } catch (e: Exception) {
-            Log.e(TAG, "Error verifying session: ${e.message}")
-            // Keep user authenticated but mark as offline
-            _authState.value = AuthState.Authenticated(savedUser, token)
-            _connectionState.value = ConnectionState.Error("Network error: ${e.message}")
-            scheduleSessionRetry()
-        }
-    }
-
-    private fun scheduleSessionRetry() {
-        repositoryScope.launch {
-            delay(30_000) // Retry after 30 seconds
-            val currentAuth = _authState.value
-            if (currentAuth is AuthState.Authenticated && _connectionState.value is ConnectionState.Error) {
-                Log.d(TAG, "Retrying session verification...")
-                verifyAndRefreshSession(currentAuth.user, currentAuth.token)
-            }
-        }
-    }
-
-    private suspend fun backgroundSync() {
-        try {
-            _connectionState.value = ConnectionState.Syncing
-            val result = apiService.getBooks()
-            when (result) {
-                is ApiResult.Success -> {
-                    val serverBooks = result.data.map { it.toLocalBook() }
-                    localDao.upsertAll(serverBooks)
-                    _connectionState.value = ConnectionState.Online
-                    Log.d(TAG, "Background sync successful: ${serverBooks.size} books")
-                }
-                is ApiResult.Error -> {
-                    _connectionState.value = ConnectionState.Error(result.message)
-                    Log.w(TAG, "Background sync failed: ${result.message}")
-                }
-            }
-        } catch (e: Exception) {
-            _connectionState.value = ConnectionState.Error(e.message ?: "Network error")
-            Log.e(TAG, "Background sync error: ${e.message}")
-        }
-    }
-
-    // Authentication methods
     suspend fun register(username: String, email: String, password: String): AuthResult {
-        Log.d(TAG, "Registering user: $username")
-        _authState.value = AuthState.Authenticating
-
-        return when (val result = apiService.register(username, email, password)) {
-            is AuthResult.Success -> {
-                Log.d(TAG, "Registration successful")
-                _authState.value = AuthState.Authenticated(result.user, result.token)
-                _connectionState.value = ConnectionState.Online
-                // Sync data after successful registration
-                syncFromServer()
-                result
-            }
-            is AuthResult.Error -> {
-                Log.e(TAG, "Registration failed: ${result.message}")
-                _authState.value = AuthState.Error(result.message)
-                _connectionState.value = ConnectionState.Error("Registration failed")
-                result
-            }
-        }
+        return authStateManager.register(username, email, password)
     }
 
-    suspend fun login(identifier: String, password: String): AuthResult {
-        Log.d(TAG, "Logging in user: $identifier")
-        _authState.value = AuthState.Authenticating
-
-        return when (val result = apiService.login(identifier, password)) {
-            is AuthResult.Success -> {
-                Log.d(TAG, "Login successful")
-                _authState.value = AuthState.Authenticated(result.user, result.token)
-                _connectionState.value = ConnectionState.Online
-                // Sync data after successful login
-                syncFromServer()
-                result
-            }
-            is AuthResult.Error -> {
-                Log.e(TAG, "Login failed: ${result.message}")
-                _authState.value = AuthState.Error(result.message)
-                _connectionState.value = ConnectionState.Error("Login failed")
-                result
-            }
-        }
+    fun logout() {
+        authStateManager.logout()
     }
 
-    suspend fun logout(): ApiResult<Unit> {
-        Log.d(TAG, "Logging out user")
-        val result = apiService.logout()
-        _authState.value = AuthState.NotAuthenticated
-        _connectionState.value = ConnectionState.Offline
-
-        // Clear local data on logout
-        try {
-            localDao.clear()
-            Log.d(TAG, "Local data cleared")
-        } catch (e: Exception) {
-            Log.e(TAG, "Error clearing local data: ${e.message}")
-        }
-
-        return result
+    fun isAuthenticated(): Boolean {
+        return authStateManager.isAuthenticated()
     }
 
-    suspend fun getProfile(): ApiResult<User> {
-        return apiService.getProfile()
+    fun getCurrentUser(): User? {
+        return authStateManager.getCurrentUser()
     }
 
-    // Session management
-    fun hasValidSession(): Boolean {
-        return apiService.hasValidSession() && _authState.value is AuthState.Authenticated
+    // Connection operations
+    suspend fun testConnection(): Boolean {
+        return connectionStateManager.testConnection()
     }
 
-    fun refreshSession() {
-        if (hasValidSession()) {
-            val currentAuth = _authState.value
-            if (currentAuth is AuthState.Authenticated) {
-                repositoryScope.launch {
-                    verifyAndRefreshSession(currentAuth.user, currentAuth.token)
-                }
-            }
-        }
-    }
-
-    // Book data methods
+    // Book CRUD operations
     fun getAllBooks(): Flow<List<Book>> {
-        return if (isAuthenticated()) {
-            // If authenticated, use local data and sync in background
-            flow {
-                // Emit local data first
-                val localBooks = localDao.all().first()
-                emit(localBooks)
-
-                // Try to sync in background if not already syncing and online
-                if (_connectionState.value !is ConnectionState.Syncing && _connectionState.value is ConnectionState.Online) {
+        return if (authStateManager.isAuthenticated()) {
+            searchService.searchBooks("").flowOn(Dispatchers.IO).onStart {
+                // Start background sync
+                repositoryScope.launch {
                     try {
-                        backgroundSync()
-                        // Emit updated data after sync
-                        val updatedBooks = localDao.all().first()
-                        emit(updatedBooks)
+                        syncService.startBackgroundSync()
                     } catch (e: Exception) {
-                        Log.e(TAG, "Background sync in getAllBooks failed: ${e.message}")
+                        Log.w(TAG, "Background sync in getAllBooks failed: ${e.message}")
                     }
                 }
             }.flowOn(Dispatchers.IO)
@@ -255,7 +81,7 @@ class BookRepository(private val context: Context) {
     }
 
     suspend fun addBook(book: Book): Boolean {
-        return if (isAuthenticated()) {
+        return if (authStateManager.isAuthenticated()) {
             // Add to server first
             val apiBook = ApiBook.fromLocalBook(book)
             when (val result = apiService.createBook(apiBook)) {
@@ -282,7 +108,7 @@ class BookRepository(private val context: Context) {
     }
 
     suspend fun updateBook(book: Book): Boolean {
-        return if (isAuthenticated() && book.id > 0) {
+        return if (authStateManager.isAuthenticated() && book.id > 0) {
             // Update on server first
             val apiBook = ApiBook.fromLocalBook(book)
             when (val result = apiService.updateBook(book.id, apiBook)) {
@@ -295,215 +121,79 @@ class BookRepository(private val context: Context) {
                 }
                 is ApiResult.Error -> {
                     // Update locally for later sync
-                    localDao.upsertAll(listOf(book))
+                    localDao.update(book)
                     Log.w(TAG, "Book updated locally only: ${book.title} - ${result.message}")
                     false
                 }
             }
         } else {
             // Update locally only
-            localDao.upsertAll(listOf(book))
+            localDao.update(book)
             Log.d(TAG, "Book updated locally: ${book.title}")
             true
         }
     }
 
     suspend fun deleteBook(book: Book): Boolean {
-        return try {
-            // Always delete locally first for immediate UI update
-            localDao.delete(book)
-            Log.d(TAG, "Book deleted from local database: ${book.title}")
-
-            // Then sync with server if possible
-            if (isAuthenticated() && book.id > 0) {
-                when (val result = apiService.deleteBook(book.id)) {
-                    is ApiResult.Success -> {
-                        Log.d(TAG, "Book deletion synced with server: ${book.title}")
-                        true
-                    }
-                    is ApiResult.Error -> {
-                        Log.w(TAG, "Local deletion succeeded, server sync failed: ${book.title} - ${result.message}")
-                        true // Still return true since local deletion worked
-                    }
+        return if (authStateManager.isAuthenticated() && book.id > 0) {
+            when (val result = apiService.deleteBook(book.id)) {
+                is ApiResult.Success -> {
+                    localDao.delete(book)
+                    Log.d(TAG, "Book deleted from server and local DB: ${book.title}")
+                    true
                 }
-            } else {
-                Log.d(TAG, "Book deleted locally (offline mode): ${book.title}")
-                true
+                is ApiResult.Error -> {
+                    Log.e(TAG, "Failed to delete book from server: ${result.message}")
+                    false
+                }
             }
-        } catch (e: Exception) {
-            Log.e(TAG, "Error deleting book: ${book.title}", e)
-            false
-        }
-    }
-
-    fun getBookById(id: Long): Flow<Book?> {
-        return localDao.getBookById(id)
-    }
-
-    fun searchBooks(query: String): Flow<List<Book>> {
-        return if (query.isBlank()) {
-            getAllBooks()
         } else {
-            localDao.all().map { books ->
-                FuzzySearchUtils.searchBooksSimple(books, query, threshold = 0.25)
-            }
+            // Delete locally only
+            localDao.delete(book)
+            Log.d(TAG, "Book deleted locally: ${book.title}")
+            true
         }
     }
 
-    fun getWishlistBooks(): Flow<List<Book>> {
-        return localDao.all().map { books ->
-            books.filter {
-                it.wishlist == WishlistStatus.WISH || it.wishlist == WishlistStatus.ON_THE_WAY
-            }
-        }
-    }
+    // Search operations (delegated to SearchService)
+    fun searchBooks(query: String): Flow<List<Book>> = searchService.searchBooks(query)
 
-    fun searchWishlistBooks(query: String): Flow<List<Book>> {
-        return getWishlistBooks().map { books ->
-            if (query.isBlank()) {
-                books
-            } else {
-                FuzzySearchUtils.searchBooksSimple(books, query, threshold = 0.25)
-            }
-        }
-    }
+    fun getBooksByStatus(status: ReadingStatus): Flow<List<Book>> =
+        searchService.getBooksByStatus(status)
 
-    fun getUniqueAuthors(): Flow<List<String>> {
-        return localDao.getUniqueAuthors()
-    }
+    fun searchBooksByStatus(status: ReadingStatus, query: String): Flow<List<Book>> =
+        searchService.searchBooksByStatus(status, query)
 
-    fun getUniqueSagas(): Flow<List<String>> {
-        return localDao.getUniqueSagas()
-    }
+    fun getBooksByAuthor(author: String): Flow<List<Book>> =
+        searchService.getBooksByAuthor(author)
 
-    // Sync operations
-    suspend fun syncFromServer(): SyncResult {
-        if (!isAuthenticated()) {
-            return SyncResult.Error("Not authenticated")
-        }
+    fun getBooksBySaga(saga: String): Flow<List<Book>> =
+        searchService.getBooksBySaga(saga)
 
-        return try {
-            Log.d(TAG, "Starting sync from server...")
-            _connectionState.value = ConnectionState.Syncing
+    fun getWishlistBooks(): Flow<List<Book>> = searchService.getWishlistBooks()
 
-            when (val result = apiService.getBooks()) {
-                is ApiResult.Success -> {
-                    val serverBooks = result.data.map { it.toLocalBook() }
-                    localDao.clear()
-                    localDao.upsertAll(serverBooks)
-                    _connectionState.value = ConnectionState.Online
-                    Log.d(TAG, "Sync from server successful: ${serverBooks.size} books")
-                    SyncResult.Success
-                }
-                is ApiResult.Error -> {
-                    _connectionState.value = ConnectionState.Error(result.message)
-                    Log.e(TAG, "Sync from server failed: ${result.message}")
-                    SyncResult.Error(result.message)
-                }
-            }
-        } catch (e: Exception) {
-            _connectionState.value = ConnectionState.Error(e.message ?: "Sync failed")
-            Log.e(TAG, "Sync from server error: ${e.message}")
-            SyncResult.Error(e.message ?: "Sync failed")
-        }
-    }
+    fun searchWishlistBooks(query: String): Flow<List<Book>> =
+        searchService.searchWishlistBooks(query)
 
-    suspend fun syncToServer(): SyncResult {
-        if (!isAuthenticated()) {
-            return SyncResult.Error("Not authenticated")
-        }
+    fun getUniqueAuthors(): Flow<List<String>> = searchService.getUniqueAuthors()
 
-        return try {
-            Log.d(TAG, "Starting sync to server...")
-            _connectionState.value = ConnectionState.Syncing
+    fun getUniqueSagas(): Flow<List<String>> = searchService.getUniqueSagas()
 
-            val localBooks = localDao.all().first()
-            var successful = 0
-            var failed = 0
+    fun getBookById(id: Long): Flow<Book?> = searchService.getBookById(id)
 
-            localBooks.forEach { book ->
-                val apiBook = ApiBook.fromLocalBook(book)
-                val result = if (book.id > 0) {
-                    apiService.updateBook(book.id, apiBook)
-                } else {
-                    apiService.createBook(apiBook)
-                }
+    // Sync operations (delegated to SyncService)
+    suspend fun syncFromServer(): SyncResult = syncService.syncFromServer()
 
-                when (result) {
-                    is ApiResult.Success -> {
-                        successful++
-                        // Update local book with server data
-                        val serverBook = result.data.toLocalBook()
-                        localDao.upsertAll(listOf(serverBook))
-                    }
-                    is ApiResult.Error -> {
-                        failed++
-                        Log.w(TAG, "Failed to sync book '${book.title}': ${result.message}")
-                    }
-                }
-            }
+    suspend fun syncToServer(): SyncResult = syncService.syncToServer()
 
-            _connectionState.value = ConnectionState.Online
-            Log.d(TAG, "Sync to server completed: $successful successful, $failed failed")
+    suspend fun fullSync(): SyncResult = syncService.fullSync()
 
-            if (failed == 0) {
-                SyncResult.Success
-            } else {
-                SyncResult.Partial("Some books failed to sync", successful, failed)
-            }
-
-        } catch (e: Exception) {
-            _connectionState.value = ConnectionState.Error(e.message ?: "Sync failed")
-            Log.e(TAG, "Sync to server error: ${e.message}")
-            SyncResult.Error(e.message ?: "Sync failed")
-        }
-    }
-
-    suspend fun replaceAllBooks(books: List<Book>) {
-        localDao.clear()
-        localDao.upsertAll(books)
-        Log.d(TAG, "Replaced all books: ${books.size} books")
-    }
-
-    // Clear error states
-    fun clearAuthError() {
-        if (_authState.value is AuthState.Error) {
-            _authState.value = AuthState.NotAuthenticated
-        }
-    }
-
-    fun clearConnectionError() {
-        if (_connectionState.value is ConnectionState.Error) {
-            val currentAuth = _authState.value
-            if (currentAuth is AuthState.Authenticated) {
-                _connectionState.value = ConnectionState.Offline
-                // Try to reconnect
-                refreshSession()
-            } else {
-                _connectionState.value = ConnectionState.Offline
-            }
-        }
-    }
-
-    // Search books including Google Books API
-    suspend fun searchBooksWithGoogleBooks(query: String): ApiResult<CombinedSearchResponse> {
-        return try {
-            Log.d(TAG, "Searching books with Google Books: '$query'")
-            val result = apiService.searchBooksWithGoogleBooks(query)
-
-            when (result) {
-                is ApiResult.Success -> {
-                    Log.d(TAG, "Search successful: ${result.data.totalLocal} local, ${result.data.totalGoogle} Google Books")
-                    result
-                }
-                is ApiResult.Error -> {
-                    Log.e(TAG, "Search failed: ${result.message}")
-                    result
-                }
-            }
-        } catch (e: Exception) {
-            Log.e(TAG, "Search exception: ${e.message}")
-            ApiResult.Error("Search failed: ${e.message}")
+    // Network search operations
+    suspend fun searchBooksWithGoogleBooks(query: String, limit: Int = 20): ApiResult<CombinedSearchResponse> {
+        return if (authStateManager.isAuthenticated()) {
+            apiService.searchBooksWithGoogleBooks(query, limit)
+        } else {
+            ApiResult.Error("Authentication required for Google Books search")
         }
     }
 
@@ -514,17 +204,48 @@ class BookRepository(private val context: Context) {
         description: String? = null,
         wishlistStatus: WishlistStatus
     ): ApiResult<Book> {
-        val result = apiService.addGoogleBook(title, author, saga, description, wishlistStatus)
-
-        if (result is ApiResult.Success) {
-            // Add to local database
-            localDao.upsertAll(listOf(result.data))
+        return if (authStateManager.isAuthenticated()) {
+            apiService.addGoogleBook(title, author, saga, description, wishlistStatus)
+        } else {
+            ApiResult.Error("Authentication required to add Google Books")
         }
-
-        return result
     }
 
-    private fun isAuthenticated(): Boolean {
-        return _authState.value is AuthState.Authenticated
+    // Statistics operations
+    suspend fun getTotalBooksCount(): Int = searchService.getTotalBooksCount()
+
+    suspend fun getCountByStatus(status: ReadingStatus): Int =
+        searchService.getCountByStatus(status)
+
+    suspend fun getCountByWishlistStatus(wishlistStatus: WishlistStatus): Int =
+        searchService.getCountByWishlistStatus(wishlistStatus)
+
+    // Advanced search with filters
+    fun getBooksWithFilters(
+        status: ReadingStatus? = null,
+        author: String? = null,
+        saga: String? = null,
+        wishlistStatus: WishlistStatus? = null,
+        query: String = ""
+    ): Flow<List<Book>> {
+        return searchService.getBooksWithMultipleFilters(status, author, saga, wishlistStatus, query)
+    }
+
+    // ADDED: Missing method for bulk operations
+    suspend fun replaceAllBooks(books: List<Book>) {
+        return withContext(Dispatchers.IO) {
+            try {
+                Log.d(TAG, "Replacing all books with ${books.size} books")
+
+                // Clear existing books and add new ones
+                localDao.clear()
+                localDao.upsertAll(books)
+
+                Log.d(TAG, "All books replaced successfully")
+            } catch (e: Exception) {
+                Log.e(TAG, "Error replacing all books: ${e.message}", e)
+                throw e
+            }
+        }
     }
 }
