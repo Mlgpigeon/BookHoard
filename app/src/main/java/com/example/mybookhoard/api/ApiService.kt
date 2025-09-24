@@ -388,8 +388,8 @@ class ApiService(private val context: Context) {
 
                 // Parse local results
                 val localResults = mutableListOf<SearchResult>()
-                if (results.has("local") && !results.isNull("local")) {
-                    val localArray = results.getJSONArray("local")
+                if (results.has("local_books") && !results.isNull("local_books")) {
+                    val localArray = results.getJSONArray("local_books")
                     for (i in 0 until localArray.length()) {
                         val bookJson = localArray.getJSONObject(i)
                         val apiBook = ApiBook.fromJson(bookJson)
