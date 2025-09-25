@@ -1,4 +1,4 @@
-package com.example.bookhoard.ui.components
+package com.example.mybookhoard.components.navigation
 
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Person

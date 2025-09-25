@@ -16,9 +16,9 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
-import com.example.bookhoard.ui.components.BottomNavigationBar
 import com.example.mybookhoard.api.auth.AuthApi
 import com.example.mybookhoard.api.auth.AuthState
+import com.example.mybookhoard.components.navigation.BottomNavigationBar
 import com.example.mybookhoard.repositories.AuthRepository
 import com.example.mybookhoard.data.auth.UserPreferences
 import com.example.mybookhoard.screens.AuthScreen
