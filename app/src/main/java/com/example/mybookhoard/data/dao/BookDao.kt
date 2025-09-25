@@ -24,6 +24,18 @@ interface BookDao {
     """)
     fun searchBooks(query: String): Flow<List<Book>>
 
+
+    @Query("""
+    SELECT b.* FROM books b
+    LEFT JOIN authors a ON b.primary_author_id = a.id
+    WHERE b.is_public = 1 
+      AND (b.title LIKE :query 
+           OR b.description LIKE :query 
+           OR a.name LIKE :query)
+    ORDER BY b.title COLLATE NOCASE
+    """)
+    fun searchPublicBooks(query: String): Flow<List<Book>>
+
     @Query("SELECT * FROM books WHERE primary_author_id = :authorId ORDER BY title COLLATE NOCASE")
     fun getBooksByAuthor(authorId: Long): Flow<List<Book>>
 

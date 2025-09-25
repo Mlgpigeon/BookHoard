@@ -154,4 +154,19 @@ object FuzzySearchUtils {
         val maxLength = max(s1.length, s2.length)
         return if (maxLength == 0) 1.0 else 1.0 - (distance.toDouble() / maxLength)
     }
+
+    fun searchPublicBooks(books: List<Book>, query: String): List<Book> {
+        if (query.isBlank()) return books
+
+        val normalizedQuery = query.lowercase().trim()
+
+        return books
+            .mapNotNull { book ->
+                val score = calculateBookScore(book, normalizedQuery)
+                if (score > 0) book to score else null
+            }
+            .sortedByDescending { it.second } // Sort by score descending
+            .map { it.first }
+    }
+
 }

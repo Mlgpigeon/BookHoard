@@ -82,14 +82,19 @@ class SearchViewModel(
 
         viewModelScope.launch {
             try {
-                // Get all books with user data
-                userBookRepository.getBooksWithUserData(currentUserId)
-                    .first() // Take first emission
-                    .let { allBooks ->
-                        // Apply fuzzy search
-                        val filteredBooks = FuzzySearchUtils.searchBooks(allBooks, query)
-                        _uiState.value = SearchUiState.Success(filteredBooks)
-                    }
+                // Search in all public books
+                val publicBooks = bookRepository.searchPublicBooks(query).first()
+
+                // Apply fuzzy search
+                val filteredBooks = FuzzySearchUtils.searchPublicBooks(publicBooks, query)
+
+                // Convert to BookWithUserData by checking if user has each book
+                val booksWithUserData = filteredBooks.map { book ->
+                    val userBook = userBookRepository.getUserBookSync(currentUserId, book.id)
+                    BookWithUserData(book, userBook)
+                }
+
+                _uiState.value = SearchUiState.Success(booksWithUserData)
             } catch (e: Exception) {
                 _uiState.value = SearchUiState.Error(
                     e.message ?: "An error occurred while searching"
@@ -151,11 +156,11 @@ class SearchViewModel(
         suggestionsJob?.cancel()
         suggestionsJob = viewModelScope.launch {
             try {
-                // Get all books for suggestion generation
-                bookRepository.getAllBooks()
+                // Get public books for suggestion generation
+                bookRepository.getPublicBooks()
                     .first()
-                    .let { allBooks ->
-                        val suggestions = FuzzySearchUtils.generateSuggestions(allBooks, query)
+                    .let { publicBooks ->
+                        val suggestions = FuzzySearchUtils.generateSuggestions(publicBooks, query)
                         _suggestions.value = suggestions
                     }
             } catch (e: Exception) {

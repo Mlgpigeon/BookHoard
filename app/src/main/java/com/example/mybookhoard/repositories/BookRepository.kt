@@ -41,6 +41,13 @@ class BookRepository private constructor(context: Context) {
     fun getBooksByAuthor(authorId: Long): Flow<List<Book>> =
         bookDao.getBooksByAuthor(authorId)
 
+    fun searchPublicBooks(query: String): Flow<List<Book>> {
+        return if (query.isBlank()) {
+            bookDao.getPublicBooks()
+        } else {
+            bookDao.searchPublicBooks("%$query%")
+        }
+    }
     fun getBooksBySaga(sagaId: Long): Flow<List<Book>> =
         bookDao.getBooksBySaga(sagaId)
 
