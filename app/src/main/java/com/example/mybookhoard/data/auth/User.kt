@@ -1,4 +1,4 @@
-package com.example.mybookhoard.data
+package com.example.mybookhoard.data.auth
 
 import org.json.JSONObject
 

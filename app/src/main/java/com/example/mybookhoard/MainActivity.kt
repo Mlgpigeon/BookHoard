@@ -13,10 +13,10 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
-import com.example.mybookhoard.api.AuthApi
-import com.example.mybookhoard.api.AuthState
+import com.example.mybookhoard.api.auth.AuthApi
+import com.example.mybookhoard.api.auth.AuthState
 import com.example.mybookhoard.repositories.AuthRepository
-import com.example.mybookhoard.data.UserPreferences
+import com.example.mybookhoard.data.auth.UserPreferences
 import com.example.mybookhoard.screens.AuthScreen
 import com.example.mybookhoard.screens.HomeScreen
 import com.example.mybookhoard.viewmodels.AuthViewModel

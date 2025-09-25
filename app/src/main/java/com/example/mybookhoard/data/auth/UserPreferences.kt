@@ -1,4 +1,4 @@
-package com.example.mybookhoard.data
+package com.example.mybookhoard.data.auth
 
 import android.content.Context
 import androidx.datastore.preferences.core.edit

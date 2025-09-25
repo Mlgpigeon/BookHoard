@@ -1,11 +1,10 @@
 package com.example.mybookhoard.repositories
 
 import android.util.Log
-import com.example.mybookhoard.api.AuthApi
-import com.example.mybookhoard.api.AuthResult
-import com.example.mybookhoard.api.AuthState
-import com.example.mybookhoard.api.AuthUser
-import com.example.mybookhoard.data.UserPreferences
+import com.example.mybookhoard.api.auth.AuthApi
+import com.example.mybookhoard.api.auth.AuthResult
+import com.example.mybookhoard.api.auth.AuthState
+import com.example.mybookhoard.data.auth.UserPreferences
 import kotlinx.coroutines.flow.MutableStateFlow
 
 class AuthRepository(private val api: AuthApi,

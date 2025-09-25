@@ -6,8 +6,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import com.example.mybookhoard.api.AuthUser
-import com.example.mybookhoard.data.User
+import com.example.mybookhoard.data.auth.User
 
 @Composable
 fun HomeScreen(user: User, onLogout: () -> Unit) {

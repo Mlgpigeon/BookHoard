@@ -1,6 +1,6 @@
-package com.example.mybookhoard.api
+package com.example.mybookhoard.api.auth
 
-import com.example.mybookhoard.data.User
+import com.example.mybookhoard.data.auth.User
 
 sealed class AuthState {
     object NotAuthenticated : AuthState()

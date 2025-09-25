@@ -1,9 +1,9 @@
-package com.example.mybookhoard.api
+package com.example.mybookhoard.api.auth
 
 import android.content.Context
 import android.content.SharedPreferences
 import android.util.Log
-import com.example.mybookhoard.data.User
+import com.example.mybookhoard.data.auth.User
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull

@@ -144,10 +144,10 @@ sealed class SyncResult {
 
 // Authentication state
 sealed class AuthState {
-    object NotAuthenticated : AuthState()
-    object Authenticating : AuthState()
-    data class Authenticated(val user: User, val token: String) : AuthState()
-    data class Error(val message: String) : AuthState()
+    object NotAuthenticated : com.example.mybookhoard.api.auth.AuthState()
+    object Authenticating : com.example.mybookhoard.api.auth.AuthState()
+    data class Authenticated(val user: User, val token: String) : com.example.mybookhoard.api.auth.AuthState()
+    data class Error(val message: String) : com.example.mybookhoard.api.auth.AuthState()
 }
 
 // Add to app/src/main/java/com/example/mybookhoard/api/ApiModels.kt

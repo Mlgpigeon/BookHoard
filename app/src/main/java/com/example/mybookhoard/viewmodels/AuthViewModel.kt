@@ -2,16 +2,12 @@ package com.example.mybookhoard.viewmodels
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.mybookhoard.api.AuthResult
-import com.example.mybookhoard.api.AuthState
-import com.example.mybookhoard.api.AuthUser
-import com.example.mybookhoard.data.UserPreferences
+import com.example.mybookhoard.api.auth.AuthResult
+import com.example.mybookhoard.api.auth.AuthState
 import com.example.mybookhoard.repositories.AuthRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
-import com.example.mybookhoard.data.User
 
 class AuthViewModel(
     private val repo: AuthRepository

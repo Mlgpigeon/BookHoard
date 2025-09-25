@@ -121,7 +121,7 @@ class ApiService(private val context: Context) {
         method: String = "GET",
         body: JSONObject? = null,
         requireAuth: Boolean = true
-    ): ApiResponse = withContext(Dispatchers.IO) {
+    ): com.example.mybookhoard.api.auth.ApiResponse = withContext(Dispatchers.IO) {
 
         // Wrap entire request with timeout
         val result = withTimeoutOrNull(REQUEST_TIMEOUT) {
@@ -164,29 +164,41 @@ class ApiService(private val context: Context) {
                 }
 
                 Log.d(TAG, "Response body: $responseBody")
-                ApiResponse(responseCode, responseBody)
+                com.example.mybookhoard.api.auth.ApiResponse(responseCode, responseBody)
 
             } catch (e: UnknownHostException) {
                 Log.e(TAG, "Network error - unknown host: ${e.message}")
-                ApiResponse(0, """{"success": false, "message": "Network error: Unable to connect to server. Please check your internet connection."}""")
+                com.example.mybookhoard.api.auth.ApiResponse(
+                    0,
+                    """{"success": false, "message": "Network error: Unable to connect to server. Please check your internet connection."}"""
+                )
             } catch (e: SocketTimeoutException) {
                 Log.e(TAG, "Network timeout: ${e.message}")
-                ApiResponse(0, """{"success": false, "message": "Network timeout: The request took too long. Please try again."}""")
+                com.example.mybookhoard.api.auth.ApiResponse(
+                    0,
+                    """{"success": false, "message": "Network timeout: The request took too long. Please try again."}"""
+                )
             } catch (e: Exception) {
                 Log.e(TAG, "Request failed: ${e.message}", e)
-                ApiResponse(0, """{"success": false, "message": "Connection error: ${e.message ?: "Unknown error"}"}""")
+                com.example.mybookhoard.api.auth.ApiResponse(
+                    0,
+                    """{"success": false, "message": "Connection error: ${e.message ?: "Unknown error"}"}"""
+                )
             }
         }
 
         // Handle timeout case
         result ?: run {
             Log.e(TAG, "Request timed out after ${REQUEST_TIMEOUT}ms")
-            ApiResponse(0, """{"success": false, "message": "Request timed out. Please check your internet connection and try again."}""")
+            com.example.mybookhoard.api.auth.ApiResponse(
+                0,
+                """{"success": false, "message": "Request timed out. Please check your internet connection and try again."}"""
+            )
         }
     }
 
     // Auth endpoints
-    suspend fun register(username: String, email: String, password: String): AuthResult {
+    suspend fun register(username: String, email: String, password: String): com.example.mybookhoard.api.auth.AuthResult {
         val body = JSONObject().apply {
             put("username", username)
             put("email", email)
@@ -197,7 +209,7 @@ class ApiService(private val context: Context) {
         return parseAuthResponse(response)
     }
 
-    suspend fun login(identifier: String, password: String): AuthResult {
+    suspend fun login(identifier: String, password: String): com.example.mybookhoard.api.auth.AuthResult {
         val body = JSONObject().apply {
             put("identifier", identifier)
             put("password", password)
@@ -346,7 +358,7 @@ class ApiService(private val context: Context) {
         }
     }
 
-    private fun parseAuthResponse(response: ApiResponse): AuthResult {
+    private fun parseAuthResponse(response: com.example.mybookhoard.api.auth.ApiResponse): com.example.mybookhoard.api.auth.AuthResult {
         return if (response.isSuccessful()) {
             try {
                 val json = JSONObject(response.body)
@@ -356,13 +368,13 @@ class ApiService(private val context: Context) {
                 val user = User.fromJson(userData)
 
                 saveUser(user, token)
-                AuthResult.Success(user, token)
+                com.example.mybookhoard.api.auth.AuthResult.Success(user, token)
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to parse auth response: ${e.message}")
-                AuthResult.Error("Failed to parse authentication response: ${e.message}")
+                com.example.mybookhoard.api.auth.AuthResult.Error("Failed to parse authentication response: ${e.message}")
             }
         } else {
-            AuthResult.Error(parseError(response.body))
+            com.example.mybookhoard.api.auth.AuthResult.Error(parseError(response.body))
         }
     }
 
@@ -569,8 +581,8 @@ sealed class ApiResult<T> {
 }
 
 sealed class AuthResult {
-    data class Success(val user: User, val token: String) : AuthResult()
-    data class Error(val message: String) : AuthResult()
+    data class Success(val user: User, val token: String) : com.example.mybookhoard.api.auth.AuthResult()
+    data class Error(val message: String) : com.example.mybookhoard.api.auth.AuthResult()
 
     fun isSuccess(): Boolean = this is Success
     fun isError(): Boolean = this is Error
