@@ -2,6 +2,7 @@ package com.example.mybookhoard.repositories
 
 import android.content.Context
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import com.example.mybookhoard.data.AppDb
@@ -47,7 +48,9 @@ class UserBookRepository private constructor(context: Context) {
         userBookDao.getFavoriteBooks(userId)
 
     fun getBooksWithUserData(userId: Long): Flow<List<BookWithUserData>> =
-        userBookDao.getBooksWithUserData(userId)
+        userBookDao.getBooksWithUserDataRaw(userId).map { resultList ->
+            resultList.map { it.toBookWithUserData() }
+        }
 
     // Write operations
     suspend fun addUserBook(userBook: UserBook): Long = withContext(Dispatchers.IO) {

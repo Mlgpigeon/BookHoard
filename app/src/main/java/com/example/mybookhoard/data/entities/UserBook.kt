@@ -81,11 +81,3 @@ enum class UserBookWishlistStatus {
     ON_THE_WAY,
     OBTAINED
 }
-
-/**
- * Combined data for showing books with user info
- */
-data class BookWithUserData(
-    val book: Book,
-    val userBook: UserBook?
-)
