@@ -194,12 +194,12 @@ class BooksApiService(private val context: Context) {
         val body = JSONObject().apply {
             put("user_id", currentUserId)
             put("book_id", bookId)
-            put("status", "NOT_STARTED")
-            put("wishlist", when(wishlistStatus) {
-                "WISH" -> true
-                "ON_THE_WAY" -> true
-                "OBTAINED" -> false
-                else -> false
+            put("reading_status", "not_started")
+            put("wishlist_status", when(wishlistStatus) {
+                "WISH" -> "wish"
+                "ON_THE_WAY" -> "on_the_way"
+                "OBTAINED" -> "obtained"
+                else -> "wish"
             })
         }
 
