@@ -3,296 +3,67 @@ package com.example.mybookhoard
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.activity.viewModels
-import androidx.compose.foundation.layout.*
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.MenuBook
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.CloudSync
-import androidx.compose.material.icons.filled.Person
-import androidx.compose.material.icons.filled.Search
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.unit.dp
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.navigation.compose.NavHost
+import androidx.navigation.compose.composable
+import androidx.navigation.compose.rememberNavController
+import com.example.mybookhoard.api.AuthApi
 import com.example.mybookhoard.api.AuthState
-import com.example.mybookhoard.api.ConnectionState
-import com.example.mybookhoard.api.SearchResult
-import com.example.mybookhoard.ui.screens.*
+import com.example.mybookhoard.repositories.AuthRepository
+import com.example.mybookhoard.data.UserPreferences
+import com.example.mybookhoard.screens.AuthScreen
+import com.example.mybookhoard.screens.HomeScreen
+import com.example.mybookhoard.viewmodels.AuthViewModel
 
 class MainActivity : ComponentActivity() {
-    private val vm: BooksVm by viewModels()
-
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
+        val prefs = UserPreferences(this)
+        val api = AuthApi(this)
+        val repo = AuthRepository(api,prefs)
+
+        val factory = object : ViewModelProvider.Factory {
+            override fun <T : ViewModel> create(modelClass: Class<T>): T {
+                @Suppress("UNCHECKED_CAST")
+                return AuthViewModel(repo) as T
+            }
+        }
+
         setContent {
             MaterialTheme {
-                AppContent(vm)
-            }
-        }
-    }
-}
+                val nav = rememberNavController()
+                val vm: AuthViewModel = viewModel(factory = factory)
+                val state by vm.state.collectAsState()
 
-@Composable
-fun AppContent(vm: BooksVm) {
-    val authState by vm.authState.collectAsState()
-    val connectionState by vm.connectionState.collectAsState()
-    val context = LocalContext.current
-
-    // Import initial data only if not authenticated
-    LaunchedEffect(authState) {
-        if (authState is AuthState.NotAuthenticated) {
-            vm.importFromAssetsOnce(context)
-        }
-    }
-
-    // Create local variable for smart cast
-    val currentAuthState = authState
-
-    when (currentAuthState) {
-        is AuthState.NotAuthenticated, is AuthState.Error -> {
-            AuthScreen(
-                authState = currentAuthState,
-                onLogin = { identifier, password ->
-                    vm.login(identifier, password)
-                },
-                onRegister = { username, email, password ->
-                    vm.register(username, email, password)
-                },
-                onClearError = {
-                    vm.clearAuthError()
-                },
-                onRetry = {
-                    vm.retryNetworkOperation()
-                }
-            )
-        }
-
-        is AuthState.Authenticating -> {
-            LoadingScreen(message = "Signing in...")
-        }
-
-        is AuthState.Authenticated -> {
-            MainAppScreen(vm, currentAuthState, connectionState)
-        }
-    }
-}
-
-@Composable
-fun LoadingScreen(message: String = "Loading...") {
-    Box(
-        modifier = Modifier.fillMaxSize(),
-        contentAlignment = Alignment.Center
-    ) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
-            CircularProgressIndicator(
-                modifier = Modifier.size(48.dp)
-            )
-            Text(
-                text = message,
-                style = MaterialTheme.typography.bodyLarge
-            )
-
-            // Add a subtle hint about network activity
-            Text(
-                text = "Please wait while we connect to the server...",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
-    }
-}
-
-sealed class Screen {
-    object Library : Screen()
-    object Add : Screen()
-    object Sync : Screen()
-    object Search : Screen()
-    object Profile : Screen()
-    object Settings : Screen()
-    data class BookDetail(val bookId: Long) : Screen()
-    data class EditBook(val bookId: Long) : Screen()
-    data class GoogleBookDetail(val googleBook: SearchResult) : Screen() // NEW
-}
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun MainAppScreen(
-    vm: BooksVm,
-    authState: AuthState.Authenticated,
-    connectionState: ConnectionState
-) {
-    var currentScreen by remember { mutableStateOf<Screen>(Screen.Library) }
-
-    // Store current screen value to enable smart cast
-    val screen = currentScreen
-
-    when (screen) {
-        is Screen.BookDetail -> {
-            BookDetailScreen(
-                bookId = screen.bookId,
-                vm = vm,
-                onNavigateBack = { currentScreen = Screen.Library },
-                onEditBook = { book ->
-                    currentScreen = Screen.EditBook(book.id)
-                }
-            )
-        }
-        is Screen.EditBook -> {
-            EditBookScreen(
-                bookId = screen.bookId,
-                vm = vm,
-                onNavigateBack = { currentScreen = Screen.Library }
-            )
-        }
-        is Screen.GoogleBookDetail -> { // NEW
-            GoogleBookDetailScreen(
-                googleBook = screen.googleBook,
-                vm = vm,
-                onNavigateBack = { currentScreen = Screen.Search },
-                onBookAdded = { currentScreen = Screen.Library }
-            )
-        }
-        else -> {
-            Scaffold(
-                topBar = {
-                    TopAppBar(
-                        title = { Text("BookHoard") },
-                        actions = {
-                            // Connection status indicator
-                            ConnectionIndicator(
-                                connectionState = connectionState,
-                                onRetry = { vm.retryNetworkOperation() }
-                            )
-                        }
-                    )
-                },
-                bottomBar = {
-                    BottomAppBar {
-                        NavigationBar {
-                            NavigationBarItem(
-                                selected = screen == Screen.Library,
-                                onClick = { currentScreen = Screen.Library },
-                                icon = { Icon(Icons.Filled.MenuBook, contentDescription = "Library") },
-                                label = { Text("Library") }
-                            )
-                            NavigationBarItem(
-                                selected = screen == Screen.Add,
-                                onClick = { currentScreen = Screen.Add },
-                                icon = { Icon(Icons.Filled.Add, contentDescription = "Add") },
-                                label = { Text("Add") }
-                            )
-                            NavigationBarItem(
-                                selected = screen == Screen.Search,
-                                onClick = { currentScreen = Screen.Search },
-                                icon = { Icon(Icons.Filled.Search, contentDescription = "Search") },
-                                label = { Text("Search") }
-                            )
-                            NavigationBarItem(
-                                selected = screen == Screen.Profile,
-                                onClick = { currentScreen = Screen.Profile },
-                                icon = { Icon(Icons.Filled.Person, contentDescription = "Profile") },
-                                label = { Text("Profile") }
-                            )
-                        }
+                NavHost(navController = nav, startDestination = "auth") {
+                    composable("auth") {
+                        AuthScreen(
+                            authState = state,
+                            onLogin = { id, pass -> vm.login(id, pass) },
+                            onRegister = { u, e, p -> vm.register(u, e, p) }
+                        )
+                    }
+                    composable("home") {
+                        val user = (state as? AuthState.Authenticated)?.user
+                        if (user != null) HomeScreen(user, onLogout = { vm.logout() })
                     }
                 }
-            ) { paddings ->
-                Box(Modifier.padding(paddings)) {
-                    when (screen) {
-                        Screen.Library -> LibraryScreen(
-                            vm = vm,
-                            onBookClick = { book -> currentScreen = Screen.BookDetail(book.id) }
-                        )
-                        Screen.Add -> AddBookScreen(vm)
-                        Screen.Search -> SearchScreen(
-                            vm = vm,
-                            onNavigateBack = { currentScreen = Screen.Library },
-                            onBookClick = { book -> currentScreen = Screen.BookDetail(book.id) },
-                            onGoogleBookClick = { googleBook -> currentScreen = Screen.GoogleBookDetail(googleBook) } // NEW
-                        )
-                        Screen.Sync -> {
-                            CloudSyncScreen(
-                                vm = vm,
-                                authState = authState,
-                                connectionState = connectionState
-                            )
+
+                LaunchedEffect(state) {
+                    when (state) {
+                        is AuthState.Authenticated -> nav.navigate("home") {
+                            popUpTo("auth") { inclusive = true }
                         }
-                        is Screen.BookDetail, is Screen.EditBook, is Screen.GoogleBookDetail -> { // UPDATE
-                            // These cases are handled above
-                        }
-                        Screen.Profile -> {
-                            ProfileScreen(
-                                vm = vm,
-                                user = authState.user,
-                                onNavigateBack = { currentScreen = Screen.Library },
-                                onNavigateToSettings = { currentScreen = Screen.Settings }
-                            )
-                        }
-                        Screen.Settings -> {
-                            SettingsScreen(
-                                onNavigateBack = { currentScreen = Screen.Profile },
-                                onNavigateToBackup = { currentScreen = Screen.Sync } // ← AGREGADO
-                            )
-                        }
+                        else -> {}
                     }
                 }
-            }
-        }
-    }
-
-
-}
-
-@Composable
-fun ConnectionIndicator(
-    connectionState: ConnectionState,
-    onRetry: () -> Unit
-) {
-    when (connectionState) {
-        is ConnectionState.Online -> {
-            Icon(
-                Icons.Filled.CloudSync,
-                contentDescription = "Online",
-                tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(20.dp)
-            )
-        }
-        is ConnectionState.Offline -> {
-            IconButton(
-                onClick = onRetry,
-                modifier = Modifier.size(32.dp)
-            ) {
-                Icon(
-                    Icons.Filled.CloudSync,
-                    contentDescription = "Offline - Tap to retry",
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(20.dp)
-                )
-            }
-        }
-        is ConnectionState.Syncing -> {
-            CircularProgressIndicator(
-                modifier = Modifier.size(20.dp),
-                strokeWidth = 2.dp
-            )
-        }
-        is ConnectionState.Error -> {
-            IconButton(
-                onClick = onRetry,
-                modifier = Modifier.size(32.dp)
-            ) {
-                Icon(
-                    Icons.Filled.CloudSync,
-                    contentDescription = "Sync Error - Tap to retry",
-                    tint = MaterialTheme.colorScheme.error,
-                    modifier = Modifier.size(20.dp)
-                )
             }
         }
     }
