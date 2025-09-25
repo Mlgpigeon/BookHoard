@@ -22,6 +22,7 @@ import com.example.mybookhoard.components.dialogs.WishlistSelectionDialog
 fun BookSearchCard(
     book: Book,
     userBook: UserBook?,
+    authorName: String? = null, // For API books that come with author name
     onAddToCollection: (UserBookWishlistStatus) -> Unit,
     onRemoveFromCollection: () -> Unit,
     modifier: Modifier = Modifier
@@ -42,7 +43,7 @@ fun BookSearchCard(
                 .fillMaxWidth()
                 .padding(16.dp)
         ) {
-            // Book title and author
+            // Book title
             Text(
                 text = book.title,
                 style = MaterialTheme.typography.titleMedium,
@@ -51,16 +52,18 @@ fun BookSearchCard(
                 overflow = TextOverflow.Ellipsis
             )
 
-            if (book.primaryAuthorId != null) {
-                // TODO: In future, resolve author name from ID
+            // Author - could be from API (authorName) or original title field
+            val displayAuthor = authorName ?: book.originalTitle // API books may use originalTitle for author
+            if (!displayAuthor.isNullOrBlank()) {
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
-                    text = "Author ID: ${book.primaryAuthorId}", // Placeholder
+                    text = "by $displayAuthor",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
 
+            // Description
             if (!book.description.isNullOrBlank()) {
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(
@@ -86,11 +89,21 @@ fun BookSearchCard(
                     if (book.publicationYear != null) {
                         BookInfoChip(text = book.publicationYear.toString())
                     }
-                    if (!book.language.isBlank() && book.language != "en") {
+                    if (book.language.isNotBlank() && book.language != "en") {
                         BookInfoChip(text = book.language.uppercase())
                     }
                     if (!book.genres.isNullOrEmpty()) {
-                        BookInfoChip(text = "${book.genres.size} genres")
+                        BookInfoChip(text = "${book.genres.size} genre${if (book.genres.size != 1) "s" else ""}")
+                    }
+                    // Show source for non-user-defined books
+                    if (book.source.name != "USER_DEFINED") {
+                        BookInfoChip(
+                            text = when (book.source.name) {
+                                "GOOGLE_BOOKS_API" -> "Google Books"
+                                "OPENLIBRARY_API" -> "Open Library"
+                                else -> book.source.name
+                            }
+                        )
                     }
                 }
 

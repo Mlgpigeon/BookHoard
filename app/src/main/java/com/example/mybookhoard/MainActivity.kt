@@ -18,9 +18,9 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.example.mybookhoard.api.auth.AuthApi
 import com.example.mybookhoard.api.auth.AuthState
+import com.example.mybookhoard.api.books.BooksApiService
 import com.example.mybookhoard.components.navigation.BottomNavigationBar
 import com.example.mybookhoard.repositories.AuthRepository
-import com.example.mybookhoard.repositories.BookRepository
 import com.example.mybookhoard.repositories.UserBookRepository
 import com.example.mybookhoard.data.auth.UserPreferences
 import com.example.mybookhoard.screens.AuthScreen
@@ -34,17 +34,19 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
 
         val prefs = UserPreferences(this)
-        val api = AuthApi(this)
-        val repo = AuthRepository(api, prefs)
+        val authApi = AuthApi(this)
+        val authRepository = AuthRepository(authApi, prefs)
 
-        // Initialize repositories
-        val bookRepository = BookRepository.getInstance(this)
+        // Initialize API service
+        val booksApiService = BooksApiService(this)
+
+        // Initialize repositories - only for other features, not search
         val userBookRepository = UserBookRepository.getInstance(this)
 
         val authFactory = object : ViewModelProvider.Factory {
             override fun <T : ViewModel> create(modelClass: Class<T>): T {
                 @Suppress("UNCHECKED_CAST")
-                return AuthViewModel(repo) as T
+                return AuthViewModel(authRepository) as T
             }
         }
 
@@ -52,8 +54,7 @@ class MainActivity : ComponentActivity() {
             override fun <T : ViewModel> create(modelClass: Class<T>): T {
                 @Suppress("UNCHECKED_CAST")
                 return SearchViewModel(
-                    bookRepository = bookRepository,
-                    userBookRepository = userBookRepository,
+                    booksApiService = booksApiService,
                     currentUserId = 1L // TODO: Get from auth
                 ) as T
             }
@@ -118,7 +119,7 @@ class MainActivity : ComponentActivity() {
                 LaunchedEffect(authState) {
                     when (authState) {
                         is AuthState.Authenticated -> {
-                            nav.navigate("search") { // Changed default to search
+                            nav.navigate("search") {
                                 popUpTo("auth") { inclusive = true }
                             }
                         }

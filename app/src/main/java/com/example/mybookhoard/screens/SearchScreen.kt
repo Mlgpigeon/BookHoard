@@ -37,7 +37,8 @@ fun SearchScreen(
             onSuggestionSelected = { suggestion ->
                 searchViewModel.selectSuggestion(suggestion)
             },
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier.fillMaxWidth(),
+            placeholder = "Search books in API..."
         )
 
         Spacer(modifier = Modifier.height(16.dp))
@@ -45,15 +46,16 @@ fun SearchScreen(
         when (val state = uiState) {
             is SearchViewModel.SearchUiState.Initial -> {
                 EmptySearchState(
-                    title = "Search Your Library",
-                    subtitle = "Find books in your collection or discover new ones",
+                    title = "Search Book Library",
+                    subtitle = "Find books from our online catalog and add them to your collection",
                     modifier = Modifier.fillMaxSize()
                 )
             }
 
             is SearchViewModel.SearchUiState.Loading -> {
                 LoadingIndicator(
-                    modifier = Modifier.fillMaxSize()
+                    modifier = Modifier.fillMaxSize(),
+                    message = "Searching online catalog..."
                 )
             }
 
@@ -61,7 +63,7 @@ fun SearchScreen(
                 if (state.books.isEmpty()) {
                     EmptySearchState(
                         title = "No Results Found",
-                        subtitle = "Try adjusting your search terms",
+                        subtitle = "Try adjusting your search terms or search for different keywords",
                         modifier = Modifier.fillMaxSize()
                     )
                 } else {
@@ -73,6 +75,7 @@ fun SearchScreen(
                             BookSearchCard(
                                 book = bookWithUserData.book,
                                 userBook = bookWithUserData.userBook,
+                                authorName = bookWithUserData.authorName,
                                 onAddToCollection = { wishlistStatus ->
                                     searchViewModel.addBookToCollection(
                                         bookWithUserData.book,
@@ -114,7 +117,7 @@ fun SearchScreen(
                         Button(
                             onClick = { searchViewModel.retrySearch() }
                         ) {
-                            Text("Retry")
+                            Text("Retry Search")
                         }
                     }
                 }

@@ -6,16 +6,17 @@ import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import com.example.mybookhoard.api.books.BooksApiService
+import com.example.mybookhoard.api.books.BooksSearchResult
+import com.example.mybookhoard.api.books.ApiBook
+import com.example.mybookhoard.api.books.BooksActionResult
 import com.example.mybookhoard.data.entities.*
-import com.example.mybookhoard.repositories.BookRepository
 import com.example.mybookhoard.repositories.UserBookRepository
-import com.example.mybookhoard.utils.FuzzySearchUtils
 import java.util.Date
 
 class SearchViewModel(
-    private val bookRepository: BookRepository,
-    private val userBookRepository: UserBookRepository,
-    private val currentUserId: Long // TODO: Inject from auth
+    private val booksApiService: BooksApiService,
+    private val currentUserId: Long
 ) : ViewModel() {
 
     // Search query state
@@ -36,26 +37,10 @@ class SearchViewModel(
     // Last search query to enable retry
     private var lastSearchQuery: String = ""
 
-    init {
-        // Set up suggestion generation based on query changes
-        viewModelScope.launch {
-            _searchQuery
-                .debounce(300) // Wait 300ms after user stops typing
-                .distinctUntilChanged()
-                .collect { query ->
-                    if (query.isNotBlank() && query.length >= 2) {
-                        generateSuggestions(query)
-                    } else {
-                        _suggestions.value = emptyList()
-                    }
-                }
-        }
-    }
-
     sealed class SearchUiState {
         object Initial : SearchUiState()
         object Loading : SearchUiState()
-        data class Success(val books: List<BookWithUserData>) : SearchUiState()
+        data class Success(val books: List<BookWithUserDataExtended>) : SearchUiState()
         data class Error(val message: String) : SearchUiState()
     }
 
@@ -65,6 +50,17 @@ class SearchViewModel(
         // Clear results if query is empty
         if (query.isBlank()) {
             _uiState.value = SearchUiState.Initial
+            _suggestions.value = emptyList()
+            return
+        }
+
+        // Generate suggestions with debounce
+        suggestionsJob?.cancel()
+        suggestionsJob = viewModelScope.launch {
+            delay(300) // Debounce
+            if (query.length >= 2 && query == _searchQuery.value) {
+                generateSuggestions(query)
+            }
         }
     }
 
@@ -81,24 +77,29 @@ class SearchViewModel(
         _uiState.value = SearchUiState.Loading
 
         viewModelScope.launch {
-            try {
-                // Search in all public books
-                val publicBooks = bookRepository.searchPublicBooks(query).first()
+            // Search ONLY in API - API returns books with user collection status
+            when (val result = booksApiService.searchBooks(query, includeGoogleBooks = true)) {
+                is BooksSearchResult.Success -> {
+                    // Convert API books directly - API already includes user collection info
+                    val booksWithUserData = result.books.map { apiBook ->
+                        val book = apiBook.toBookEntity()
+                        // API should return user book status - no local verification
+                        val userBook = null // TODO: API should include this info
 
-                // Apply fuzzy search
-                val filteredBooks = FuzzySearchUtils.searchPublicBooks(publicBooks, query)
+                        BookWithUserDataExtended(
+                            book = book,
+                            userBook = userBook,
+                            authorName = apiBook.author,
+                            sagaName = apiBook.saga,
+                            sourceLabel = apiBook.sourceLabel
+                        )
+                    }
 
-                // Convert to BookWithUserData by checking if user has each book
-                val booksWithUserData = filteredBooks.map { book ->
-                    val userBook = userBookRepository.getUserBookSync(currentUserId, book.id)
-                    BookWithUserData(book, userBook)
+                    _uiState.value = SearchUiState.Success(booksWithUserData)
                 }
-
-                _uiState.value = SearchUiState.Success(booksWithUserData)
-            } catch (e: Exception) {
-                _uiState.value = SearchUiState.Error(
-                    e.message ?: "An error occurred while searching"
-                )
+                is BooksSearchResult.Error -> {
+                    _uiState.value = SearchUiState.Error(result.message)
+                }
             }
         }
     }
@@ -112,20 +113,29 @@ class SearchViewModel(
     fun addBookToCollection(book: Book, wishlistStatus: UserBookWishlistStatus) {
         viewModelScope.launch {
             try {
-                val userBook = UserBook(
-                    userId = currentUserId,
-                    bookId = book.id,
-                    readingStatus = UserBookReadingStatus.NOT_STARTED,
-                    wishlistStatus = wishlistStatus,
-                    createdAt = Date(),
-                    updatedAt = Date()
+                val bookData = mapOf(
+                    "title" to book.title,
+                    "author" to (book.originalTitle ?: ""), // Assuming originalTitle has author
+                    "description" to (book.description ?: ""),
+                    "publication_year" to book.publicationYear,
+                    "language" to book.language,
+                    "is_public" to book.isPublic,
+                    "source" to book.source.name.lowercase()
                 )
 
-                userBookRepository.addUserBook(userBook)
-
-                // Refresh search results
-                if (lastSearchQuery.isNotBlank()) {
-                    performSearch()
+                when (val result = booksApiService.addBookToCollection(
+                    bookData as Map<String, Any>,
+                    wishlistStatus.name
+                )) {
+                    is BooksActionResult.Success -> {
+                        // Refresh search results from API
+                        if (lastSearchQuery.isNotBlank()) {
+                            performSearch()
+                        }
+                    }
+                    is BooksActionResult.Error -> {
+                        _uiState.value = SearchUiState.Error(result.message)
+                    }
                 }
             } catch (e: Exception) {
                 _uiState.value = SearchUiState.Error(
@@ -138,11 +148,16 @@ class SearchViewModel(
     fun removeBookFromCollection(bookId: Long) {
         viewModelScope.launch {
             try {
-                userBookRepository.deleteUserBook(currentUserId, bookId)
-
-                // Refresh search results
-                if (lastSearchQuery.isNotBlank()) {
-                    performSearch()
+                when (val result = booksApiService.removeBookFromCollection(bookId)) {
+                    is BooksActionResult.Success -> {
+                        // Refresh search results from API
+                        if (lastSearchQuery.isNotBlank()) {
+                            performSearch()
+                        }
+                    }
+                    is BooksActionResult.Error -> {
+                        _uiState.value = SearchUiState.Error(result.message)
+                    }
                 }
             } catch (e: Exception) {
                 _uiState.value = SearchUiState.Error(
@@ -152,21 +167,34 @@ class SearchViewModel(
         }
     }
 
-    private fun generateSuggestions(query: String) {
-        suggestionsJob?.cancel()
-        suggestionsJob = viewModelScope.launch {
-            try {
-                // Get public books for suggestion generation
-                bookRepository.getPublicBooks()
-                    .first()
-                    .let { publicBooks ->
-                        val suggestions = FuzzySearchUtils.generateSuggestions(publicBooks, query)
-                        _suggestions.value = suggestions
-                    }
-            } catch (e: Exception) {
-                // Silently fail for suggestions
-                _suggestions.value = emptyList()
+    private suspend fun generateSuggestions(query: String) {
+        try {
+            // Get suggestions from API search
+            when (val result = booksApiService.searchBooks(query, includeGoogleBooks = false)) {
+                is BooksSearchResult.Success -> {
+                    val suggestions = result.books
+                        .take(5) // Limit suggestions
+                        .mapNotNull { book ->
+                            when {
+                                book.title.contains(query, ignoreCase = true) -> book.title
+                                book.author?.contains(query, ignoreCase = true) == true -> book.author
+                                book.genres?.any { it.contains(query, ignoreCase = true) } == true ->
+                                    book.genres.find { it.contains(query, ignoreCase = true) }
+                                else -> null
+                            }
+                        }
+                        .distinct()
+
+                    _suggestions.value = suggestions
+                }
+                is BooksSearchResult.Error -> {
+                    // Silently fail for suggestions
+                    _suggestions.value = emptyList()
+                }
             }
+        } catch (e: Exception) {
+            // Silently fail for suggestions
+            _suggestions.value = emptyList()
         }
     }
 }
