@@ -20,10 +20,14 @@ import com.example.mybookhoard.api.auth.AuthApi
 import com.example.mybookhoard.api.auth.AuthState
 import com.example.mybookhoard.components.navigation.BottomNavigationBar
 import com.example.mybookhoard.repositories.AuthRepository
+import com.example.mybookhoard.repositories.BookRepository
+import com.example.mybookhoard.repositories.UserBookRepository
 import com.example.mybookhoard.data.auth.UserPreferences
 import com.example.mybookhoard.screens.AuthScreen
 import com.example.mybookhoard.screens.ProfileScreen
+import com.example.mybookhoard.screens.SearchScreen
 import com.example.mybookhoard.viewmodels.AuthViewModel
+import com.example.mybookhoard.viewmodels.SearchViewModel
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -33,40 +37,77 @@ class MainActivity : ComponentActivity() {
         val api = AuthApi(this)
         val repo = AuthRepository(api, prefs)
 
-        val factory = object : ViewModelProvider.Factory {
+        // Initialize repositories
+        val bookRepository = BookRepository.getInstance(this)
+        val userBookRepository = UserBookRepository.getInstance(this)
+
+        val authFactory = object : ViewModelProvider.Factory {
             override fun <T : ViewModel> create(modelClass: Class<T>): T {
                 @Suppress("UNCHECKED_CAST")
                 return AuthViewModel(repo) as T
             }
         }
 
+        val searchFactory = object : ViewModelProvider.Factory {
+            override fun <T : ViewModel> create(modelClass: Class<T>): T {
+                @Suppress("UNCHECKED_CAST")
+                return SearchViewModel(
+                    bookRepository = bookRepository,
+                    userBookRepository = userBookRepository,
+                    currentUserId = 1L // TODO: Get from auth
+                ) as T
+            }
+        }
+
         setContent {
             MaterialTheme {
                 val nav = rememberNavController()
-                val vm: AuthViewModel = viewModel(factory = factory)
-                val state by vm.state.collectAsState()
+                val authVm: AuthViewModel = viewModel(factory = authFactory)
+                val authState by authVm.state.collectAsState()
 
                 NavHost(navController = nav, startDestination = "auth") {
                     composable("auth") {
                         AuthScreen(
-                            authState = state,
-                            onLogin = { id, pass -> vm.login(id, pass) },
-                            onRegister = { u, e, p -> vm.register(u, e, p) }
+                            authState = authState,
+                            onLogin = { id, pass -> authVm.login(id, pass) },
+                            onRegister = { u, e, p -> authVm.register(u, e, p) }
                         )
                     }
+
+                    composable("search") {
+                        val searchVm: SearchViewModel = viewModel(factory = searchFactory)
+                        val user = (authState as? AuthState.Authenticated)?.user
+                        if (user != null) {
+                            Scaffold(
+                                bottomBar = {
+                                    BottomNavigationBar(
+                                        isSearchSelected = true,
+                                        onSearchClick = { /* Already on search */ },
+                                        onProfileClick = { nav.navigate("profile") }
+                                    )
+                                }
+                            ) { paddingValues ->
+                                Box(modifier = androidx.compose.ui.Modifier.padding(paddingValues)) {
+                                    SearchScreen(searchViewModel = searchVm)
+                                }
+                            }
+                        }
+                    }
+
                     composable("profile") {
-                        val user = (state as? AuthState.Authenticated)?.user
+                        val user = (authState as? AuthState.Authenticated)?.user
                         if (user != null) {
                             Scaffold(
                                 bottomBar = {
                                     BottomNavigationBar(
                                         isProfileSelected = true,
+                                        onSearchClick = { nav.navigate("search") },
                                         onProfileClick = { /* Already on profile */ }
                                     )
                                 }
                             ) { paddingValues ->
                                 Box(modifier = androidx.compose.ui.Modifier.padding(paddingValues)) {
-                                    ProfileScreen(user, onLogout = { vm.logout() })
+                                    ProfileScreen(user, onLogout = { authVm.logout() })
                                 }
                             }
                         }
@@ -74,22 +115,22 @@ class MainActivity : ComponentActivity() {
                 }
 
                 // Handle navigation based on auth state changes
-                LaunchedEffect(state) {
-                    when (state) {
+                LaunchedEffect(authState) {
+                    when (authState) {
                         is AuthState.Authenticated -> {
-                            nav.navigate("profile") {
+                            nav.navigate("search") { // Changed default to search
                                 popUpTo("auth") { inclusive = true }
                             }
                         }
                         is AuthState.NotAuthenticated -> {
-                            // Navigate back to auth screen on logout
                             nav.navigate("auth") {
+                                popUpTo("search") { inclusive = true }
                                 popUpTo("profile") { inclusive = true }
                             }
                         }
                         is AuthState.Error -> {
-                            // Stay on auth screen for errors
                             nav.navigate("auth") {
+                                popUpTo("search") { inclusive = true }
                                 popUpTo("profile") { inclusive = true }
                             }
                         }

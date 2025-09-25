@@ -1,6 +1,9 @@
 package com.example.mybookhoard.data.converters
 
 import androidx.room.TypeConverter
+import com.example.mybookhoard.data.entities.BookSource
+import com.example.mybookhoard.data.entities.UserBookReadingStatus
+import com.example.mybookhoard.data.entities.UserBookWishlistStatus
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
 import java.util.Date
