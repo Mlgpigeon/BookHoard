@@ -11,8 +11,6 @@ import com.example.mybookhoard.api.books.BooksSearchResult
 import com.example.mybookhoard.api.books.ApiBook
 import com.example.mybookhoard.api.books.BooksActionResult
 import com.example.mybookhoard.data.entities.*
-import com.example.mybookhoard.repositories.UserBookRepository
-import java.util.Date
 
 class SearchViewModel(
     private val booksApiService: BooksApiService,
@@ -77,14 +75,22 @@ class SearchViewModel(
         _uiState.value = SearchUiState.Loading
 
         viewModelScope.launch {
-            // Search ONLY in API - API returns books with user collection status
-            when (val result = booksApiService.searchBooks(query, includeGoogleBooks = true)) {
+            // Search in API - API includes user collection status
+            when (val result = booksApiService.searchBooks(query, includeGoogleBooks = false)) {
                 is BooksSearchResult.Success -> {
-                    // Convert API books directly - API already includes user collection info
+                    // Convert API books to BookWithUserDataExtended
                     val booksWithUserData = result.books.map { apiBook ->
                         val book = apiBook.toBookEntity()
-                        // API should return user book status - no local verification
-                        val userBook = null // TODO: API should include this info
+                        // Create UserBook if already in collection (canBeAdded = false)
+                        val userBook = if (apiBook.canBeAdded == false) {
+                            // If canBeAdded is false, it means the book is in user's collection
+                            UserBook(
+                                userId = currentUserId,
+                                bookId = book.id,
+                                readingStatus = UserBookReadingStatus.NOT_STARTED,
+                                wishlistStatus = UserBookWishlistStatus.WISH // Default, could be improved
+                            )
+                        } else null
 
                         BookWithUserDataExtended(
                             book = book,
@@ -113,22 +119,13 @@ class SearchViewModel(
     fun addBookToCollection(book: Book, wishlistStatus: UserBookWishlistStatus) {
         viewModelScope.launch {
             try {
-                val bookData = mapOf(
-                    "title" to book.title,
-                    "author" to (book.originalTitle ?: ""), // Assuming originalTitle has author
-                    "description" to (book.description ?: ""),
-                    "publication_year" to book.publicationYear,
-                    "language" to book.language,
-                    "is_public" to book.isPublic,
-                    "source" to book.source.name.lowercase()
-                )
-
+                // Call the corrected API method that creates user_book relationship
                 when (val result = booksApiService.addBookToCollection(
-                    bookData as Map<String, Any>,
-                    wishlistStatus.name
+                    bookId = book.id,
+                    wishlistStatus = wishlistStatus.name
                 )) {
                     is BooksActionResult.Success -> {
-                        // Refresh search results from API
+                        // Refresh search results to update the button state
                         if (lastSearchQuery.isNotBlank()) {
                             performSearch()
                         }
@@ -150,7 +147,7 @@ class SearchViewModel(
             try {
                 when (val result = booksApiService.removeBookFromCollection(bookId)) {
                     is BooksActionResult.Success -> {
-                        // Refresh search results from API
+                        // Refresh search results to update the button state
                         if (lastSearchQuery.isNotBlank()) {
                             performSearch()
                         }

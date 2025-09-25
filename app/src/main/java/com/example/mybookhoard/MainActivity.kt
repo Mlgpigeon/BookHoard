@@ -50,12 +50,13 @@ class MainActivity : ComponentActivity() {
             }
         }
 
+
         val searchFactory = object : ViewModelProvider.Factory {
             override fun <T : ViewModel> create(modelClass: Class<T>): T {
                 @Suppress("UNCHECKED_CAST")
                 return SearchViewModel(
                     booksApiService = booksApiService,
-                    currentUserId = 1L // TODO: Get from auth
+                    currentUserId = getCurrentUserId()
                 ) as T
             }
         }
@@ -142,5 +143,9 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+    }
+    private fun getCurrentUserId(): Long {
+        val prefs = getSharedPreferences("bookhoard_auth", MODE_PRIVATE)
+        return prefs.getLong("user_id", -1L)
     }
 }

@@ -14,6 +14,7 @@ data class ApiBook(
     val originalTitle: String?,
     val description: String?,
     val author: String?,
+    val authorId: Long?,
     val saga: String?,
     val sagaNumber: Int?,
     val language: String,
@@ -47,6 +48,7 @@ data class ApiBook(
                 originalTitle = json.optString("original_title").takeIf { it.isNotBlank() },
                 description = json.optString("description").takeIf { it.isNotBlank() },
                 author = json.optString("author").takeIf { it.isNotBlank() },
+                authorId = json.optLong("author_id", 0).takeIf { it != 0L },
                 saga = json.optString("saga").takeIf { it.isNotBlank() },
                 sagaNumber = json.optInt("saga_number", 0).takeIf { it != 0 },
                 language = json.optString("language", "en"),
@@ -98,7 +100,7 @@ data class ApiBook(
             title = title,
             originalTitle = originalTitle,
             description = description,
-            primaryAuthorId = null, // Will be resolved when needed
+            primaryAuthorId = authorId, // Use the authorId from API
             sagaId = null, // Will be resolved when needed
             sagaNumber = sagaNumber,
             language = language,
@@ -118,6 +120,43 @@ data class ApiBook(
             },
             createdAt = Date(),
             updatedAt = Date()
+        )
+    }
+
+    /**
+     * Create a copy with updated canBeAdded status
+     */
+    fun copy(canBeAdded: Boolean): ApiBook {
+        return this.copy(
+            id = this.id,
+            title = this.title,
+            originalTitle = this.originalTitle,
+            description = this.description,
+            author = this.author,
+            authorId = this.authorId,
+            saga = this.saga,
+            sagaNumber = this.sagaNumber,
+            language = this.language,
+            publicationYear = this.publicationYear,
+            genres = this.genres,
+            isbn = this.isbn,
+            coverSelected = this.coverSelected,
+            images = this.images,
+            adaptations = this.adaptations,
+            averageRating = this.averageRating,
+            totalRatings = this.totalRatings,
+            isPublic = this.isPublic,
+            source = this.source,
+            sourceLabel = this.sourceLabel,
+            createdAt = this.createdAt,
+            updatedAt = this.updatedAt,
+            googleBooksId = this.googleBooksId,
+            publisher = this.publisher,
+            publishedDate = this.publishedDate,
+            pageCount = this.pageCount,
+            categories = this.categories,
+            imageLinks = this.imageLinks,
+            canBeAdded = canBeAdded
         )
     }
 }

@@ -29,61 +29,109 @@ class BooksApiService(private val context: Context) {
     }
 
     /**
-     * Search books in the remote API - includes user's collection status
+     * Search books in the remote API - uses dedicated search endpoint
      */
     suspend fun searchBooks(query: String, includeGoogleBooks: Boolean = true): BooksSearchResult {
         if (query.isBlank()) {
             return BooksSearchResult.Success(emptyList(), query)
         }
 
-        val endpoint = if (includeGoogleBooks) {
-            "books/search-google?q=${query.trim()}&include_google_books=true"
-        } else {
-            "books/search?q=${query.trim()}"
-        }
-
-        val response = makeAuthenticatedRequest(endpoint, "GET")
+        // Use the search endpoint with query parameter
+        val response = makeAuthenticatedRequest("books/search?q=${query.trim()}", "GET")
 
         return when {
             response.isSuccessful() -> {
                 try {
+                    Log.d(TAG, "Raw search response: ${response.body}")
                     val json = JSONObject(response.body)
-                    val data = json.getJSONObject("data")
 
-                    val books = if (includeGoogleBooks && data.has("results")) {
-                        // Enhanced search with Google Books
-                        val results = data.getJSONObject("results")
-                        val combinedBooks = results.optJSONArray("combined") ?: JSONArray()
-                        parseBooksList(combinedBooks)
-                    } else {
-                        // Regular search
-                        val booksArray = data.optJSONArray("books") ?: JSONArray()
-                        parseBooksList(booksArray)
+                    if (!json.has("success") || !json.getBoolean("success")) {
+                        return BooksSearchResult.Error("API returned unsuccessful response")
                     }
 
-                    Log.d(TAG, "Search successful: found ${books.size} books for query '$query'")
-                    BooksSearchResult.Success(books, query)
+                    val data = json.getJSONObject("data")
+                    val booksArray = data.getJSONArray("books") ?: JSONArray()
+
+                    Log.d(TAG, "Found ${booksArray.length()} books in API response")
+
+                    // Parse books from search results
+                    val books = parseBooksList(booksArray)
+
+                    Log.d(TAG, "Successfully parsed ${books.size} books")
+
+                    // For each book, check if user already has it in collection
+                    val booksWithUserStatus = checkUserCollectionStatus(books)
+
+                    Log.d(TAG, "Search successful: found ${booksWithUserStatus.size} books for query '$query'")
+                    BooksSearchResult.Success(booksWithUserStatus, query)
                 } catch (e: Exception) {
                     Log.e(TAG, "Failed to parse search response", e)
+                    Log.e(TAG, "Response body was: ${response.body}")
                     BooksSearchResult.Error("Failed to parse search results: ${e.message}")
                 }
             }
             else -> {
                 val errorMessage = parseError(response.body)
-                Log.e(TAG, "Search failed: $errorMessage")
+                Log.e(TAG, "Search failed with code ${response.code}: $errorMessage")
+                Log.e(TAG, "Response body: ${response.body}")
                 BooksSearchResult.Error(errorMessage)
             }
         }
     }
 
     /**
+     * Check user collection status for each book
+     */
+    private suspend fun checkUserCollectionStatus(books: List<ApiBook>): List<ApiBook> {
+        return books.map { book ->
+            book.id?.let { bookId ->
+                // Check if user has this book in collection
+                val hasInCollection = checkIfBookInUserCollection(bookId)
+                book.copy(canBeAdded = !hasInCollection)
+            } ?: book.copy(canBeAdded = true)
+        }
+    }
+
+    /**
+     * Check if a book is already in user's collection
+     */
+    private suspend fun checkIfBookInUserCollection(bookId: Long): Boolean {
+        return try {
+            val response = makeAuthenticatedRequest("user_books/by-book/$bookId", "GET")
+            if (response.isSuccessful()) {
+                val json = JSONObject(response.body)
+                val data = json.getJSONObject("data")
+                val userBooks = data.getJSONArray("userbooks")
+
+                // Check if current user has this book
+                val currentUserId = getCurrentUserId()
+                for (i in 0 until userBooks.length()) {
+                    val userBook = userBooks.getJSONObject(i)
+                    if (userBook.getLong("user_id") == currentUserId) {
+                        return true
+                    }
+                }
+            }
+            false
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to check user collection status for book $bookId", e)
+            false
+        }
+    }
+
+    /**
+     * Get current user ID from shared preferences
+     */
+    private fun getCurrentUserId(): Long {
+        val prefs = context.getSharedPreferences("bookhoard_auth", Context.MODE_PRIVATE)
+        return prefs.getLong("user_id", -1)
+    }
+
+    /**
      * Get public books
      */
     suspend fun getPublicBooks(limit: Int = 50, offset: Int = 0): BooksSearchResult {
-        val response = makeAuthenticatedRequest(
-            "books/public?limit=$limit&offset=$offset",
-            "GET"
-        )
+        val response = makeAuthenticatedRequest("books/public", "GET")
 
         return when {
             response.isSuccessful() -> {
@@ -92,9 +140,10 @@ class BooksApiService(private val context: Context) {
                     val data = json.getJSONObject("data")
                     val booksArray = data.getJSONArray("books")
                     val books = parseBooksList(booksArray)
+                    val booksWithUserStatus = checkUserCollectionStatus(books)
 
-                    Log.d(TAG, "Got ${books.size} public books")
-                    BooksSearchResult.Success(books, "")
+                    Log.d(TAG, "Got ${booksWithUserStatus.size} public books")
+                    BooksSearchResult.Success(booksWithUserStatus, "")
                 } catch (e: Exception) {
                     Log.e(TAG, "Failed to parse public books response", e)
                     BooksSearchResult.Error("Failed to parse public books: ${e.message}")
@@ -117,14 +166,110 @@ class BooksApiService(private val context: Context) {
         for (i in 0 until booksArray.length()) {
             try {
                 val bookJson = booksArray.getJSONObject(i)
+                Log.d(TAG, "Parsing book $i: ${bookJson}")
                 val book = ApiBook.fromJson(bookJson)
                 books.add(book)
+                Log.d(TAG, "Successfully parsed book: ${book.title}")
             } catch (e: Exception) {
                 Log.w(TAG, "Failed to parse book at index $i: ${e.message}")
+                Log.w(TAG, "Book JSON was: ${booksArray.optJSONObject(i)}")
             }
         }
 
         return books
+    }
+
+    /**
+     * Add book to user's collection via API - Creates user_book relationship
+     */
+    suspend fun addBookToCollection(
+        bookId: Long,
+        wishlistStatus: String
+    ): BooksActionResult {
+        val currentUserId = getCurrentUserId()
+        if (currentUserId == -1L) {
+            return BooksActionResult.Error("User not authenticated")
+        }
+
+        val body = JSONObject().apply {
+            put("user_id", currentUserId)
+            put("book_id", bookId)
+            put("status", "NOT_STARTED")
+            put("wishlist", when(wishlistStatus) {
+                "WISH" -> true
+                "ON_THE_WAY" -> true
+                "OBTAINED" -> false
+                else -> false
+            })
+        }
+
+        val response = makeAuthenticatedRequest("user_books", "POST", body)
+
+        return when {
+            response.isSuccessful() -> {
+                Log.d(TAG, "Book added to collection successfully")
+                BooksActionResult.Success("Book added to collection")
+            }
+            else -> {
+                val errorMessage = parseError(response.body)
+                Log.e(TAG, "Add book failed: $errorMessage")
+                BooksActionResult.Error(errorMessage)
+            }
+        }
+    }
+
+    /**
+     * Remove book from user's collection via API - Deletes user_book relationship
+     */
+    suspend fun removeBookFromCollection(bookId: Long): BooksActionResult {
+        val currentUserId = getCurrentUserId()
+        if (currentUserId == -1L) {
+            return BooksActionResult.Error("User not authenticated")
+        }
+
+        // First, find the user_book ID
+        val getUserBookResponse = makeAuthenticatedRequest("user_books/by-book/$bookId", "GET")
+
+        if (!getUserBookResponse.isSuccessful()) {
+            return BooksActionResult.Error("Failed to find book in collection")
+        }
+
+        try {
+            val json = JSONObject(getUserBookResponse.body)
+            val data = json.getJSONObject("data")
+            val userBooks = data.getJSONArray("userbooks")
+
+            var userBookId: Long? = null
+            for (i in 0 until userBooks.length()) {
+                val userBook = userBooks.getJSONObject(i)
+                if (userBook.getLong("user_id") == currentUserId) {
+                    userBookId = userBook.getLong("id")
+                    break
+                }
+            }
+
+            if (userBookId == null) {
+                return BooksActionResult.Error("Book not found in your collection")
+            }
+
+            // Delete the user_book relationship
+            val deleteResponse = makeAuthenticatedRequest("user_books/$userBookId", "DELETE")
+
+            return when {
+                deleteResponse.isSuccessful() -> {
+                    Log.d(TAG, "Book removed from collection successfully")
+                    BooksActionResult.Success("Book removed from collection")
+                }
+                else -> {
+                    val errorMessage = parseError(deleteResponse.body)
+                    Log.e(TAG, "Remove book failed: $errorMessage")
+                    BooksActionResult.Error(errorMessage)
+                }
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to parse user books response", e)
+            return BooksActionResult.Error("Failed to process removal")
+        }
     }
 
     /**
@@ -190,54 +335,6 @@ class BooksApiService(private val context: Context) {
         } ?: ApiResponse(408, """{"message": "Request timeout"}""")
     }
 
-    /**
-     * Add book to user's collection via API
-     */
-    suspend fun addBookToCollection(
-        bookData: Map<String, Any>,
-        wishlistStatus: String
-    ): BooksActionResult {
-        val body = JSONObject().apply {
-            bookData.forEach { (key, value) ->
-                put(key, value)
-            }
-            put("wishlist", wishlistStatus)
-            put("status", "NOT_STARTED")
-        }
-
-        val response = makeAuthenticatedRequest("books", "POST", body)
-
-        return when {
-            response.isSuccessful() -> {
-                Log.d(TAG, "Book added to collection successfully")
-                BooksActionResult.Success("Book added to collection")
-            }
-            else -> {
-                val errorMessage = parseError(response.body)
-                Log.e(TAG, "Add book failed: $errorMessage")
-                BooksActionResult.Error(errorMessage)
-            }
-        }
-    }
-
-    /**
-     * Remove book from user's collection via API
-     */
-    suspend fun removeBookFromCollection(bookId: Long): BooksActionResult {
-        val response = makeAuthenticatedRequest("books/$bookId", "DELETE")
-
-        return when {
-            response.isSuccessful() -> {
-                Log.d(TAG, "Book removed from collection successfully")
-                BooksActionResult.Success("Book removed from collection")
-            }
-            else -> {
-                val errorMessage = parseError(response.body)
-                Log.e(TAG, "Remove book failed: $errorMessage")
-                BooksActionResult.Error(errorMessage)
-            }
-        }
-    }
     private fun parseError(responseBody: String): String {
         return try {
             val json = JSONObject(responseBody)

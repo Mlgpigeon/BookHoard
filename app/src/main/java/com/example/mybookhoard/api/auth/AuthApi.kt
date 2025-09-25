@@ -125,7 +125,7 @@ class AuthApi(private val context: Context) {
             putLong(LAST_SYNC_KEY, System.currentTimeMillis())
             apply()
         }
-        Log.d(TAG, "User session saved: ${user.username}")
+        Log.d(TAG, "User session saved: ${user.username} (ID: ${user.id})")
     }
 
     private fun parseAuthResponse(response: ApiResponse): AuthResult {
