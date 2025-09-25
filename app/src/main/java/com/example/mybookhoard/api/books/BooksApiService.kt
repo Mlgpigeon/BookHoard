@@ -2,6 +2,7 @@ package com.example.mybookhoard.api.books
 
 import android.content.Context
 import android.util.Log
+import com.example.mybookhoard.data.entities.UserBook
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -202,6 +203,53 @@ class BooksApiService(private val context: Context) {
             return BooksActionResult.Error("Failed to process removal")
         }
     }
+
+    suspend fun getUserBooksForUser(userId: Long): List<UserBook> {
+        val response = apiClient.makeAuthenticatedRequest("user_books?user_id=$userId", "GET")
+        return if (response.isSuccessful()) {
+            try {
+                val root = JSONObject(response.body)
+                val arr = root.optJSONArray("data") ?: JSONArray()
+                val list = mutableListOf<UserBook>()
+                for (i in 0 until arr.length()) {
+                    val obj = arr.getJSONObject(i)
+                    val ub = UserBookParser.parseUserBookFromJson(
+                        obj,
+                        obj.optLong("book_id"),
+                        obj.optLong("user_id")
+                    )
+                    if (ub.userId == userId) list.add(ub)
+                }
+                list
+            } catch (e: Exception) {
+                Log.e(TAG, "getUserBooksForUser - parse error", e)
+                emptyList()
+            }
+        } else {
+            Log.w(TAG, "getUserBooksForUser - request failed ${'$'}{response.code}")
+            emptyList()
+        }
+    }
+
+    suspend fun getBookById(bookId: Long): ApiBook? {
+         val response = apiClient.makeAuthenticatedRequest("books/$bookId", "GET")
+         return if (response.isSuccessful()) {
+             try {
+                 val root = JSONObject(response.body)
+                 // Soportar tanto formato envuelto como objeto directo
+                 val obj: JSONObject = when {
+                     root.has("data") -> root.getJSONObject("data")
+                     else -> root
+                     }
+                 ApiBook.fromJson(obj)
+                 } catch (e: Exception) {
+                 Log.e(TAG, "getBookById - parse error", e)
+                 null
+                 }
+             } else {
+             Log.w(TAG, "getBookById - request failed ${'$'}{response.code}")
+             null }
+         }
 
     /**
      * Get user book for specific book and user

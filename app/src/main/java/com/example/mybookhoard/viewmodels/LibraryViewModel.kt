@@ -3,6 +3,8 @@ package com.example.mybookhoard.viewmodels
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.mybookhoard.api.books.ApiBook
+import com.example.mybookhoard.api.books.BooksApiService
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import com.example.mybookhoard.repositories.UserBookRepository
@@ -12,7 +14,8 @@ import com.example.mybookhoard.data.entities.*
 class LibraryViewModel(
     private val userBookRepository: UserBookRepository,
     private val bookRepository: BookRepository,
-    private val userId: Long
+    private val userId: Long,
+    private val booksApiService: BooksApiService,
 ) : ViewModel() {
 
     companion object {
@@ -62,48 +65,39 @@ class LibraryViewModel(
         viewModelScope.launch {
             _isLoading.value = true
             _error.value = null
-
             try {
-                // Load all user books with book data
-                userBookRepository.getBooksWithUserData(userId).collect { allBooksWithUserData ->
+                // NUEVO: obtener user_books del usuario vía API y, a partir de sus IDs, recuperar cada book
+                 val userBooks = booksApiService.getUserBooksForUser(userId)
+                 val allBooksWithUserData = mutableListOf<BookWithUserData>()
 
-                    // Filter for obtained books (My Library)
-                    val obtainedBooks = allBooksWithUserData.filter {
-                        it.userBook?.wishlistStatus == UserBookWishlistStatus.OBTAINED
-                    }
+                 for (ub in userBooks) {
+                     val apiBook: ApiBook? = booksApiService.getBookById(ub.bookId)
+                     val bookEntity = apiBook?.toBookEntity() ?: continue
+                     allBooksWithUserData += BookWithUserData(book = bookEntity, userBook = ub)
+                     }
 
-                    // Separate by reading status
-                    _readBooks.value = obtainedBooks.filter {
-                        it.userBook?.readingStatus == UserBookReadingStatus.READ
-                    }
-                    _readingBooks.value = obtainedBooks.filter {
-                        it.userBook?.readingStatus == UserBookReadingStatus.READING
-                    }
-                    _notStartedBooks.value = obtainedBooks.filter {
-                        it.userBook?.readingStatus == UserBookReadingStatus.NOT_STARTED
-                    }
+                 // Filtrado por estados
+                 val obtainedBooks = allBooksWithUserData.filter { it.userBook?.wishlistStatus == UserBookWishlistStatus.OBTAINED }
+                 _readBooks.value = obtainedBooks.filter { it.userBook?.readingStatus == UserBookReadingStatus.READ }
+                 _readingBooks.value = obtainedBooks.filter { it.userBook?.readingStatus == UserBookReadingStatus.READING }
+                 _notStartedBooks.value = obtainedBooks.filter { it.userBook?.readingStatus == UserBookReadingStatus.NOT_STARTED || it.userBook?.readingStatus == null }
 
-                    // Filter for wishlist books (My Wishlist)
-                    _wishlistBooks.value = allBooksWithUserData.filter {
-                        it.userBook?.wishlistStatus == UserBookWishlistStatus.WISH
-                    }
-                    _onTheWayBooks.value = allBooksWithUserData.filter {
-                        it.userBook?.wishlistStatus == UserBookWishlistStatus.ON_THE_WAY
-                    }
+                 // Datos para pestaña Wishlist
+                 _wishlistBooks.value = allBooksWithUserData.filter { it.userBook?.wishlistStatus == UserBookWishlistStatus.WISH }
+                 _onTheWayBooks.value = allBooksWithUserData.filter { it.userBook?.wishlistStatus == UserBookWishlistStatus.ON_THE_WAY }
 
-                    // Calculate statistics
-                    _libraryStats.value = LibraryStats(
-                        totalBooks = obtainedBooks.size,
-                        readBooks = _readBooks.value.size,
-                        readingBooks = _readingBooks.value.size,
-                        notStartedBooks = _notStartedBooks.value.size
-                    )
+                 _libraryStats.value = LibraryStats(
+                     totalBooks = obtainedBooks.size,
+                     readBooks = _readBooks.value.size,
+                     readingBooks = _readingBooks.value.size,
+                     notStartedBooks = _notStartedBooks.value.size
+                             )
 
                     Log.d(TAG, "Library data loaded - Total: ${obtainedBooks.size}, " +
                             "Read: ${_readBooks.value.size}, Reading: ${_readingBooks.value.size}, " +
                             "Not Started: ${_notStartedBooks.value.size}, " +
                             "Wishlist: ${_wishlistBooks.value.size}, On The Way: ${_onTheWayBooks.value.size}")
-                }
+
             } catch (e: Exception) {
                 Log.e(TAG, "Error loading library data", e)
                 _error.value = "Failed to load library: ${e.message}"

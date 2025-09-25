@@ -170,42 +170,6 @@ fun LibraryBookCard(
                 }
             }
 
-            // Status badges
-            Spacer(modifier = Modifier.height(12.dp))
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                // Reading status badge
-                userBook?.readingStatus?.let { status ->
-                    StatusChip(
-                        text = when (status) {
-                            UserBookReadingStatus.READING -> "Reading"
-                            UserBookReadingStatus.READ -> "Read"
-                            UserBookReadingStatus.NOT_STARTED -> "Not Started"
-                            UserBookReadingStatus.ABANDONED -> "Abandoned"
-                        },
-                        containerColor = when (status) {
-                            UserBookReadingStatus.READING -> MaterialTheme.colorScheme.primaryContainer
-                            UserBookReadingStatus.READ -> MaterialTheme.colorScheme.secondaryContainer
-                            UserBookReadingStatus.NOT_STARTED -> MaterialTheme.colorScheme.tertiaryContainer
-                            UserBookReadingStatus.ABANDONED -> MaterialTheme.colorScheme.errorContainer
-                        }
-                    )
-                }
-
-                // Wishlist status badge
-                userBook?.wishlistStatus?.let { status ->
-                    StatusChip(
-                        text = when (status) {
-                            UserBookWishlistStatus.WISH -> "Wishlist"
-                            UserBookWishlistStatus.ON_THE_WAY -> "On The Way"
-                            UserBookWishlistStatus.OBTAINED -> "Obtained"
-                        },
-                        containerColor = MaterialTheme.colorScheme.surfaceVariant
-                    )
-                }
-            }
         }
     }
 

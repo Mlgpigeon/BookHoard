@@ -70,7 +70,8 @@ class MainActivity : ComponentActivity() {
                 return LibraryViewModel(
                     userBookRepository = userBookRepository,
                     bookRepository = bookRepository,
-                    userId = getCurrentUserId()
+                    userId = getCurrentUserId(),
+                    booksApiService = booksApiService
                 ) as T
             }
         }
