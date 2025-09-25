@@ -1,6 +1,7 @@
 package com.example.mybookhoard.components.navigation
 
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.LibraryBooks
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.*
@@ -9,8 +10,10 @@ import androidx.compose.runtime.Composable
 @Composable
 fun BottomNavigationBar(
     isSearchSelected: Boolean = false,
+    isLibrarySelected: Boolean = false,
     isProfileSelected: Boolean = false,
     onSearchClick: () -> Unit,
+    onLibraryClick: () -> Unit,
     onProfileClick: () -> Unit
 ) {
     BottomAppBar {
@@ -25,6 +28,18 @@ fun BottomNavigationBar(
                     )
                 },
                 label = { Text("Search") }
+            )
+
+            NavigationBarItem(
+                selected = isLibrarySelected,
+                onClick = onLibraryClick,
+                icon = {
+                    Icon(
+                        Icons.Filled.LibraryBooks,
+                        contentDescription = "Library"
+                    )
+                },
+                label = { Text("Library") }
             )
 
             NavigationBarItem(

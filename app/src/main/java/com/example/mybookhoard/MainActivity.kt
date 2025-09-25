@@ -22,12 +22,15 @@ import com.example.mybookhoard.api.books.BooksApiService
 import com.example.mybookhoard.components.navigation.BottomNavigationBar
 import com.example.mybookhoard.repositories.AuthRepository
 import com.example.mybookhoard.repositories.UserBookRepository
+import com.example.mybookhoard.repositories.BookRepository
 import com.example.mybookhoard.data.auth.UserPreferences
 import com.example.mybookhoard.screens.AuthScreen
 import com.example.mybookhoard.screens.ProfileScreen
 import com.example.mybookhoard.screens.SearchScreen
+import com.example.mybookhoard.screens.LibraryScreen
 import com.example.mybookhoard.viewmodels.AuthViewModel
 import com.example.mybookhoard.viewmodels.SearchViewModel
+import com.example.mybookhoard.viewmodels.LibraryViewModel
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -40,8 +43,9 @@ class MainActivity : ComponentActivity() {
         // Initialize API service
         val booksApiService = BooksApiService(this)
 
-        // Initialize repositories - only for other features, not search
+        // Initialize repositories
         val userBookRepository = UserBookRepository.getInstance(this)
+        val bookRepository = BookRepository.getInstance(this)
 
         val authFactory = object : ViewModelProvider.Factory {
             override fun <T : ViewModel> create(modelClass: Class<T>): T {
@@ -50,13 +54,23 @@ class MainActivity : ComponentActivity() {
             }
         }
 
-
         val searchFactory = object : ViewModelProvider.Factory {
             override fun <T : ViewModel> create(modelClass: Class<T>): T {
                 @Suppress("UNCHECKED_CAST")
                 return SearchViewModel(
                     booksApiService = booksApiService,
                     currentUserId = getCurrentUserId()
+                ) as T
+            }
+        }
+
+        val libraryFactory = object : ViewModelProvider.Factory {
+            override fun <T : ViewModel> create(modelClass: Class<T>): T {
+                @Suppress("UNCHECKED_CAST")
+                return LibraryViewModel(
+                    userBookRepository = userBookRepository,
+                    bookRepository = bookRepository,
+                    userId = getCurrentUserId()
                 ) as T
             }
         }
@@ -85,12 +99,34 @@ class MainActivity : ComponentActivity() {
                                     BottomNavigationBar(
                                         isSearchSelected = true,
                                         onSearchClick = { /* Already on search */ },
+                                        onLibraryClick = { nav.navigate("library") },
                                         onProfileClick = { nav.navigate("profile") }
                                     )
                                 }
                             ) { paddingValues ->
                                 Box(modifier = androidx.compose.ui.Modifier.padding(paddingValues)) {
                                     SearchScreen(searchViewModel = searchVm)
+                                }
+                            }
+                        }
+                    }
+
+                    composable("library") {
+                        val libraryVm: LibraryViewModel = viewModel(factory = libraryFactory)
+                        val user = (authState as? AuthState.Authenticated)?.user
+                        if (user != null) {
+                            Scaffold(
+                                bottomBar = {
+                                    BottomNavigationBar(
+                                        isLibrarySelected = true,
+                                        onSearchClick = { nav.navigate("search") },
+                                        onLibraryClick = { /* Already on library */ },
+                                        onProfileClick = { nav.navigate("profile") }
+                                    )
+                                }
+                            ) { paddingValues ->
+                                Box(modifier = androidx.compose.ui.Modifier.padding(paddingValues)) {
+                                    LibraryScreen(libraryViewModel = libraryVm)
                                 }
                             }
                         }
@@ -104,6 +140,7 @@ class MainActivity : ComponentActivity() {
                                     BottomNavigationBar(
                                         isProfileSelected = true,
                                         onSearchClick = { nav.navigate("search") },
+                                        onLibraryClick = { nav.navigate("library") },
                                         onProfileClick = { /* Already on profile */ }
                                     )
                                 }
@@ -120,19 +157,21 @@ class MainActivity : ComponentActivity() {
                 LaunchedEffect(authState) {
                     when (authState) {
                         is AuthState.Authenticated -> {
-                            nav.navigate("search") {
+                            nav.navigate("library") {
                                 popUpTo("auth") { inclusive = true }
                             }
                         }
                         is AuthState.NotAuthenticated -> {
                             nav.navigate("auth") {
                                 popUpTo("search") { inclusive = true }
+                                popUpTo("library") { inclusive = true }
                                 popUpTo("profile") { inclusive = true }
                             }
                         }
                         is AuthState.Error -> {
                             nav.navigate("auth") {
                                 popUpTo("search") { inclusive = true }
+                                popUpTo("library") { inclusive = true }
                                 popUpTo("profile") { inclusive = true }
                             }
                         }
@@ -144,6 +183,7 @@ class MainActivity : ComponentActivity() {
             }
         }
     }
+
     private fun getCurrentUserId(): Long {
         val prefs = getSharedPreferences("bookhoard_auth", MODE_PRIVATE)
         return prefs.getLong("user_id", -1L)
