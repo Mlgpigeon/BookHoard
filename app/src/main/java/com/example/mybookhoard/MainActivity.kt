@@ -18,7 +18,7 @@ import com.example.mybookhoard.api.auth.AuthState
 import com.example.mybookhoard.repositories.AuthRepository
 import com.example.mybookhoard.data.auth.UserPreferences
 import com.example.mybookhoard.screens.AuthScreen
-import com.example.mybookhoard.screens.HomeScreen
+import com.example.mybookhoard.screens.ProfileScreen
 import com.example.mybookhoard.viewmodels.AuthViewModel
 
 class MainActivity : ComponentActivity() {
@@ -50,15 +50,15 @@ class MainActivity : ComponentActivity() {
                             onRegister = { u, e, p -> vm.register(u, e, p) }
                         )
                     }
-                    composable("home") {
+                    composable("profile") {
                         val user = (state as? AuthState.Authenticated)?.user
-                        if (user != null) HomeScreen(user, onLogout = { vm.logout() })
+                        if (user != null) ProfileScreen(user, onLogout = { vm.logout() })
                     }
                 }
 
                 LaunchedEffect(state) {
                     when (state) {
-                        is AuthState.Authenticated -> nav.navigate("home") {
+                        is AuthState.Authenticated -> nav.navigate("profile") {
                             popUpTo("auth") { inclusive = true }
                         }
                         else -> {}

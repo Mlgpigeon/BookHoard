@@ -9,7 +9,7 @@ import androidx.compose.ui.unit.dp
 import com.example.mybookhoard.data.auth.User
 
 @Composable
-fun HomeScreen(user: User, onLogout: () -> Unit) {
+fun ProfileScreen(user: User, onLogout: () -> Unit) {
     Column(
         modifier = Modifier.fillMaxSize().padding(24.dp),
         verticalArrangement = Arrangement.Center,
