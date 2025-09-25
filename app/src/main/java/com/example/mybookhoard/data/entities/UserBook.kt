@@ -1,4 +1,4 @@
-package com.example.mybookhoard.data
+package com.example.mybookhoard.data.entities
 
 import androidx.room.Entity
 import androidx.room.PrimaryKey
@@ -20,7 +20,9 @@ import java.util.Date
     indices = [
         Index(value = ["book_id"]),
         Index(value = ["user_id"]),
-        Index(value = ["user_id", "book_id"], unique = true)
+        Index(value = ["user_id", "book_id"], unique = true),
+        Index(value = ["user_id", "reading_status"]),
+        Index(value = ["user_id", "wishlist_status"])
     ]
 )
 data class UserBook(
@@ -79,3 +81,11 @@ enum class UserBookWishlistStatus {
     ON_THE_WAY,
     OBTAINED
 }
+
+/**
+ * Combined data for showing books with user info
+ */
+data class BookWithUserData(
+    val book: Book,
+    val userBook: UserBook?
+)
