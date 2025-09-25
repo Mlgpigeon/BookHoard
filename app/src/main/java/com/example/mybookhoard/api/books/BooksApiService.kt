@@ -3,6 +3,8 @@ package com.example.mybookhoard.api.books
 import android.content.Context
 import android.util.Log
 import com.example.mybookhoard.data.entities.UserBook
+import com.example.mybookhoard.data.entities.UserBookReadingStatus
+import com.example.mybookhoard.data.entities.UserBookWishlistStatus
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -90,6 +92,65 @@ class BooksApiService(private val context: Context) {
             }
         }
     }
+
+    suspend fun updateUserBookStatus(
+        userBookId: Long,
+        newReading: UserBookReadingStatus?,
+        newWishlist: UserBookWishlistStatus?
+         ): UserBookResult {
+         return try {
+             val payload = JSONObject().apply {
+                 newReading?.let {
+                     put(
+                         "reading_status",
+                         when (it) {
+                             UserBookReadingStatus.NOT_STARTED -> "not_started"
+                             UserBookReadingStatus.READING -> "reading"
+                             UserBookReadingStatus.READ -> "read"
+                             UserBookReadingStatus.ABANDONED -> "abandoned"
+                         }
+                                 )
+                     }
+                 newWishlist?.let {
+                     put(
+                         "wishlist_status",
+                         when (it) {
+                             UserBookWishlistStatus.WISH -> "wish"
+                             UserBookWishlistStatus.ON_THE_WAY -> "on_the_way"
+                             UserBookWishlistStatus.OBTAINED -> "obtained"
+                             }
+                                 )
+                     }
+                 }
+
+             val response = apiClient.makeAuthenticatedRequest(
+                 "user_books/$userBookId",
+                 "PUT",
+                 payload
+                         )
+
+             if (response.isSuccessful()) {
+                 val root = JSONObject(response.body)
+                 val data = if (root.has("data")) root.get("data") else root
+                 val obj = when (data) {
+                     is JSONObject -> data
+                     is JSONArray -> if (data.length() > 0) data.getJSONObject(0) else JSONObject()
+                     else -> JSONObject()
+                     }
+
+                 // Necesitamos bookId y userId para el parser
+                 val bookId = obj.optLong("book_id")
+                 val userId = obj.optLong("user_id")
+                 val parsed = UserBookParser.parseUserBookFromJson(obj, bookId, userId)
+                 UserBookResult.Success(parsed)
+                 } else {
+                 UserBookResult.Error("HTTP ${'$'}{response.code}: ${'$'}{apiClient.extractErrorMessage(response.body)}")
+                 }
+             } catch (e: Exception) {
+             Log.e(TAG, "updateUserBookStatus - exception", e)
+             UserBookResult.Error(e.message ?: "Unknown error")
+             }
+         }
 
     /**
      * Add book to user's collection via API

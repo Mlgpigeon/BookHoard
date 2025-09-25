@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.mybookhoard.api.books.ApiBook
 import com.example.mybookhoard.api.books.BooksApiService
+import com.example.mybookhoard.api.books.UserBookResult
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import com.example.mybookhoard.repositories.UserBookRepository
@@ -107,23 +108,32 @@ class LibraryViewModel(
         }
     }
 
+
     fun updateReadingStatus(bookId: Long, newStatus: UserBookReadingStatus) {
         viewModelScope.launch {
             try {
-                val userBook = userBookRepository.getUserBookSync(userId, bookId)
-                if (userBook != null) {
-                    val updatedUserBook = userBook.copy(
-                        readingStatus = newStatus,
-                        dateStarted = if (newStatus == UserBookReadingStatus.READING && userBook.dateStarted == null)
-                            java.util.Date() else userBook.dateStarted,
-                        dateFinished = if (newStatus == UserBookReadingStatus.READ)
-                            java.util.Date() else null
-                    )
-                    userBookRepository.updateUserBook(updatedUserBook)
-                    Log.d(TAG, "Updated reading status for book $bookId to $newStatus")
+                // Buscar el UserBook que corresponda al bookId
+                val userBooks = booksApiService.getUserBooksForUser(userId)
+                val userBook = userBooks.find { it.bookId == bookId }
+                if (userBook == null) {
+                    Log.w(TAG, "updateReadingStatus - no userBook found for bookId=$bookId")
+                    return@launch
+                }
+
+                // Llamar a la API
+                val result = booksApiService.updateUserBookStatus(
+                    userBookId = userBook.id,
+                    newReading = newStatus,
+                    newWishlist = userBook.wishlistStatus
+                )
+                if (result is UserBookResult.Success) {
+                    Log.d(TAG, "updateReadingStatus success for bookId=$bookId")
+                    loadLibraryData()
+                } else {
+                    _error.value = "Failed to update reading status"
                 }
             } catch (e: Exception) {
-                Log.e(TAG, "Error updating reading status", e)
+                Log.e(TAG, "updateReadingStatus exception", e)
                 _error.value = "Failed to update reading status: ${e.message}"
             }
         }
@@ -132,14 +142,26 @@ class LibraryViewModel(
     fun updateWishlistStatus(bookId: Long, newStatus: UserBookWishlistStatus?) {
         viewModelScope.launch {
             try {
-                val userBook = userBookRepository.getUserBookSync(userId, bookId)
-                if (userBook != null) {
-                    val updatedUserBook = userBook.copy(wishlistStatus = newStatus)
-                    userBookRepository.updateUserBook(updatedUserBook)
-                    Log.d(TAG, "Updated wishlist status for book $bookId to $newStatus")
+                val userBooks = booksApiService.getUserBooksForUser(userId)
+                val userBook = userBooks.find { it.bookId == bookId }
+                if (userBook == null) {
+                    Log.w(TAG, "updateWishlistStatus - no userBook found for bookId=$bookId")
+                    return@launch
+                }
+
+                val result = booksApiService.updateUserBookStatus(
+                    userBookId = userBook.id,
+                    newReading = userBook.readingStatus,
+                    newWishlist = newStatus
+                )
+                if (result is UserBookResult.Success) {
+                    Log.d(TAG, "updateWishlistStatus success for bookId=$bookId")
+                    loadLibraryData()
+                } else {
+                    _error.value = "Failed to update wishlist status"
                 }
             } catch (e: Exception) {
-                Log.e(TAG, "Error updating wishlist status", e)
+                Log.e(TAG, "updateWishlistStatus exception", e)
                 _error.value = "Failed to update wishlist status: ${e.message}"
             }
         }
