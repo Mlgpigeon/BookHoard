@@ -13,6 +13,7 @@ import com.example.mybookhoard.api.books.ApiBook
 import com.example.mybookhoard.api.books.BooksActionResult
 import com.example.mybookhoard.data.entities.*
 import kotlinx.coroutines.delay
+import com.example.mybookhoard.api.books.UserBookResult
 
 class SearchViewModel(
     private val booksApiService: BooksApiService,
@@ -111,11 +112,11 @@ class SearchViewModel(
     private suspend fun getUserBookForBook(bookId: Long): UserBook? {
         return try {
             when (val result = booksApiService.getUserBookForBook(bookId, currentUserId)) {
-                is BooksApiService.UserBookResult.Success -> {
+                is UserBookResult.Success -> {
                     Log.d("SearchViewModel", "Got real UserBook data - wishlist_status: ${result.userBook.wishlistStatus}")
                     result.userBook
                 }
-                is BooksApiService.UserBookResult.Error -> {
+                is UserBookResult.Error -> {
                     Log.w("SearchViewModel", "Failed to get user book data: ${result.message}")
                     null
                 }

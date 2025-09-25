@@ -1,21 +1,21 @@
 package com.example.mybookhoard.components.search
 
 import androidx.compose.foundation.layout.*
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Check
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.example.mybookhoard.data.entities.Book
 import com.example.mybookhoard.data.entities.UserBook
 import com.example.mybookhoard.data.entities.UserBookWishlistStatus
 import com.example.mybookhoard.components.dialogs.RemoveBookDialog
 import com.example.mybookhoard.components.dialogs.WishlistSelectionDialog
+
+/**
+ * Modularized Book Search Card Component
+ * Path: app/src/main/java/com/example/mybookhoard/components/search/BookSearchCard.kt
+ */
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -44,38 +44,32 @@ fun BookSearchCard(
                 .padding(16.dp)
         ) {
             // Book title
-            Text(
-                text = book.title,
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis
+            BookTitle(
+                title = book.title,
+                modifier = Modifier.fillMaxWidth()
             )
 
             // Author - could be from API (authorName) or original title field
             val displayAuthor = authorName ?: book.originalTitle // API books may use originalTitle for author
             if (!displayAuthor.isNullOrBlank()) {
                 Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    text = "by $displayAuthor",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                BookAuthor(
+                    authorName = displayAuthor,
+                    modifier = Modifier.fillMaxWidth()
                 )
             }
 
             // Description
             if (!book.description.isNullOrBlank()) {
                 Spacer(modifier = Modifier.height(8.dp))
-                Text(
-                    text = book.description,
-                    style = MaterialTheme.typography.bodySmall,
+                BookDescription(
+                    description = book.description,
                     maxLines = 3,
-                    overflow = TextOverflow.Ellipsis,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    modifier = Modifier.fillMaxWidth()
                 )
             }
 
-            // Book metadata
+            // Book metadata and action button
             Spacer(modifier = Modifier.height(12.dp))
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -83,29 +77,10 @@ fun BookSearchCard(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 // Book info chips
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    if (book.publicationYear != null) {
-                        BookInfoChip(text = book.publicationYear.toString())
-                    }
-                    if (book.language.isNotBlank() && book.language != "en") {
-                        BookInfoChip(text = book.language.uppercase())
-                    }
-                    if (!book.genres.isNullOrEmpty()) {
-                        BookInfoChip(text = "${book.genres.size} genre${if (book.genres.size != 1) "s" else ""}")
-                    }
-                    // Show source for non-user-defined books
-                    if (book.source.name != "USER_DEFINED") {
-                        BookInfoChip(
-                            text = when (book.source.name) {
-                                "GOOGLE_BOOKS_API" -> "Google Books"
-                                "OPENLIBRARY_API" -> "Open Library"
-                                else -> book.source.name
-                            }
-                        )
-                    }
-                }
+                BookMetadataRow(
+                    book = book,
+                    modifier = Modifier.weight(1f)
+                )
 
                 // Add/Remove button
                 CollectionButton(
@@ -138,74 +113,5 @@ fun BookSearchCard(
             },
             onDismiss = { showRemoveDialog = false }
         )
-    }
-}
-
-@Composable
-private fun BookInfoChip(
-    text: String,
-    modifier: Modifier = Modifier
-) {
-    AssistChip(
-        onClick = { /* Future: Filter by this criteria */ },
-        label = {
-            Text(
-                text = text,
-                style = MaterialTheme.typography.labelSmall
-            )
-        },
-        modifier = modifier
-    )
-}
-
-@Composable
-private fun CollectionButton(
-    isInCollection: Boolean,
-    wishlistStatus: UserBookWishlistStatus?,
-    onAddClick: () -> Unit,
-    onRemoveClick: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    if (isInCollection) {
-        FilledTonalButton(
-            onClick = onRemoveClick,
-            modifier = modifier,
-            colors = ButtonDefaults.filledTonalButtonColors(
-                containerColor = MaterialTheme.colorScheme.primaryContainer,
-                contentColor = MaterialTheme.colorScheme.onPrimaryContainer
-            )
-        ) {
-            Icon(
-                imageVector = Icons.Default.Check,
-                contentDescription = null,
-                modifier = Modifier.size(16.dp)
-            )
-            Spacer(modifier = Modifier.width(4.dp))
-            Text(
-                text = when (wishlistStatus) {
-                    UserBookWishlistStatus.WISH -> "Wished"
-                    UserBookWishlistStatus.ON_THE_WAY -> "On The Way"
-                    UserBookWishlistStatus.OBTAINED -> "Obtained"
-                    null -> "Added"
-                },
-                style = MaterialTheme.typography.labelMedium
-            )
-        }
-    } else {
-        OutlinedButton(
-            onClick = onAddClick,
-            modifier = modifier
-        ) {
-            Icon(
-                imageVector = Icons.Default.Add,
-                contentDescription = null,
-                modifier = Modifier.size(16.dp)
-            )
-            Spacer(modifier = Modifier.width(4.dp))
-            Text(
-                text = "Add",
-                style = MaterialTheme.typography.labelMedium
-            )
-        }
     }
 }
