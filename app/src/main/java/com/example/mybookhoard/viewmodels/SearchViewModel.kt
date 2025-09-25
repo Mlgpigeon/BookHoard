@@ -1,5 +1,6 @@
 package com.example.mybookhoard.viewmodels
 
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.flow.*
@@ -11,6 +12,7 @@ import com.example.mybookhoard.api.books.BooksSearchResult
 import com.example.mybookhoard.api.books.ApiBook
 import com.example.mybookhoard.api.books.BooksActionResult
 import com.example.mybookhoard.data.entities.*
+import kotlinx.coroutines.delay
 
 class SearchViewModel(
     private val booksApiService: BooksApiService,
@@ -78,18 +80,14 @@ class SearchViewModel(
             // Search in API - API includes user collection status
             when (val result = booksApiService.searchBooks(query, includeGoogleBooks = false)) {
                 is BooksSearchResult.Success -> {
-                    // Convert API books to BookWithUserDataExtended
+                    // Convert API books to BookWithUserDataExtended with REAL user book data
                     val booksWithUserData = result.books.map { apiBook ->
                         val book = apiBook.toBookEntity()
-                        // Create UserBook if already in collection (canBeAdded = false)
+
+                        // 🔧 FIXED: Get real UserBook data instead of hardcoded values
                         val userBook = if (apiBook.canBeAdded == false) {
-                            // If canBeAdded is false, it means the book is in user's collection
-                            UserBook(
-                                userId = currentUserId,
-                                bookId = book.id,
-                                readingStatus = UserBookReadingStatus.NOT_STARTED,
-                                wishlistStatus = UserBookWishlistStatus.WISH // Default, could be improved
-                            )
+                            // If canBeAdded is false, get the actual user_book data from API
+                            getUserBookForBook(book.id)
                         } else null
 
                         BookWithUserDataExtended(
@@ -110,6 +108,24 @@ class SearchViewModel(
         }
     }
 
+    private suspend fun getUserBookForBook(bookId: Long): UserBook? {
+        return try {
+            when (val result = booksApiService.getUserBookForBook(bookId, currentUserId)) {
+                is BooksApiService.UserBookResult.Success -> {
+                    Log.d("SearchViewModel", "Got real UserBook data - wishlist_status: ${result.userBook.wishlistStatus}")
+                    result.userBook
+                }
+                is BooksApiService.UserBookResult.Error -> {
+                    Log.w("SearchViewModel", "Failed to get user book data: ${result.message}")
+                    null
+                }
+            }
+        } catch (e: Exception) {
+            Log.e("SearchViewModel", "Exception getting user book data", e)
+            null
+        }
+    }
+
     fun retrySearch() {
         if (lastSearchQuery.isNotBlank()) {
             performSearch()
@@ -119,22 +135,34 @@ class SearchViewModel(
     fun addBookToCollection(book: Book, wishlistStatus: UserBookWishlistStatus) {
         viewModelScope.launch {
             try {
+                Log.d("SearchViewModel", "Adding book to collection: ${book.title} with status: ${wishlistStatus.name}")
+
                 // Call the corrected API method that creates user_book relationship
                 when (val result = booksApiService.addBookToCollection(
                     bookId = book.id,
                     wishlistStatus = wishlistStatus.name
                 )) {
                     is BooksActionResult.Success -> {
+                        Log.d("SearchViewModel", "Book added successfully: ${result.message}")
+
+                        // Add a small delay to ensure the database has been updated
+                        delay(500)
+
                         // Refresh search results to update the button state
                         if (lastSearchQuery.isNotBlank()) {
+                            Log.d("SearchViewModel", "Refreshing search results...")
                             performSearch()
+                        } else {
+                            Log.w("SearchViewModel", "No search query to refresh")
                         }
                     }
                     is BooksActionResult.Error -> {
-                        _uiState.value = SearchUiState.Error(result.message)
+                        Log.e("SearchViewModel", "Failed to add book to collection: ${result.message}")
+                        _uiState.value = SearchUiState.Error("Failed to add book: ${result.message}")
                     }
                 }
             } catch (e: Exception) {
+                Log.e("SearchViewModel", "Exception adding book to collection", e)
                 _uiState.value = SearchUiState.Error(
                     "Failed to add book to collection: ${e.message}"
                 )

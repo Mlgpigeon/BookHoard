@@ -2,6 +2,9 @@ package com.example.mybookhoard.api.books
 
 import android.content.Context
 import android.util.Log
+import com.example.mybookhoard.data.entities.UserBook
+import com.example.mybookhoard.data.entities.UserBookReadingStatus
+import com.example.mybookhoard.data.entities.UserBookWishlistStatus
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
@@ -83,9 +86,11 @@ class BooksApiService(private val context: Context) {
      * Check user collection status for each book
      */
     private suspend fun checkUserCollectionStatus(books: List<ApiBook>): List<ApiBook> {
+        val currentUserId = getCurrentUserId()
+
         return books.map { book ->
             book.id?.let { bookId ->
-                // Check if user has this book in collection
+                // Check if user has this book in collection and get real data
                 val hasInCollection = checkIfBookInUserCollection(bookId)
                 book.copy(canBeAdded = !hasInCollection)
             } ?: book.copy(canBeAdded = true)
@@ -99,22 +104,48 @@ class BooksApiService(private val context: Context) {
         return try {
             val response = makeAuthenticatedRequest("user_books/by-book/$bookId", "GET")
             if (response.isSuccessful()) {
+                Log.d(TAG, "checkIfBookInUserCollection - Response: ${response.body}")
                 val json = JSONObject(response.body)
+
+                if (!json.getBoolean("success")) {
+                    Log.w(TAG, "checkIfBookInUserCollection - API returned success=false")
+                    return false
+                }
+
                 val data = json.getJSONObject("data")
-                val userBooks = data.getJSONArray("userbooks")
+
+                // 🔧 FIXED: Handle the corrected response format from PHP
+                val userBooks = if (data.has("userbooks")) {
+                    data.getJSONArray("userbooks")
+                } else {
+                    // Handle old format if PHP hasn't been updated yet
+                    Log.w(TAG, "checkIfBookInUserCollection - Using fallback for old response format")
+                    if (data is JSONArray) {
+                        data as JSONArray
+                    } else {
+                        JSONArray()
+                    }
+                }
 
                 // Check if current user has this book
                 val currentUserId = getCurrentUserId()
                 for (i in 0 until userBooks.length()) {
                     val userBook = userBooks.getJSONObject(i)
-                    if (userBook.getLong("user_id") == currentUserId) {
+                    val userBookUserId = userBook.getLong("user_id")
+                    if (userBookUserId == currentUserId) {
+                        Log.d(TAG, "checkIfBookInUserCollection - Found book in user collection")
                         return true
                     }
                 }
+
+                Log.d(TAG, "checkIfBookInUserCollection - Book not in user collection")
+                false
+            } else {
+                Log.w(TAG, "checkIfBookInUserCollection - Request failed with code ${response.code}")
+                false
             }
-            false
         } catch (e: Exception) {
-            Log.w(TAG, "Failed to check user collection status for book $bookId", e)
+            Log.e(TAG, "checkIfBookInUserCollection - Exception for book $bookId", e)
             false
         }
     }
@@ -188,31 +219,60 @@ class BooksApiService(private val context: Context) {
     ): BooksActionResult {
         val currentUserId = getCurrentUserId()
         if (currentUserId == -1L) {
+            Log.e(TAG, "addBookToCollection - User not authenticated")
             return BooksActionResult.Error("User not authenticated")
+        }
+
+        val wishlistStatusValue = when(wishlistStatus) {
+            "WISH" -> "wish"
+            "ON_THE_WAY" -> "on_the_way"
+            "OBTAINED" -> "obtained"
+            else -> "wish"
         }
 
         val body = JSONObject().apply {
             put("user_id", currentUserId)
             put("book_id", bookId)
             put("reading_status", "not_started")
-            put("wishlist_status", when(wishlistStatus) {
-                "WISH" -> "wish"
-                "ON_THE_WAY" -> "on_the_way"
-                "OBTAINED" -> "obtained"
-                else -> "wish"
-            })
+            put("wishlist_status", wishlistStatusValue)
         }
+
+        Log.d(TAG, "addBookToCollection - Sending request: ${body}")
 
         val response = makeAuthenticatedRequest("user_books", "POST", body)
 
         return when {
             response.isSuccessful() -> {
-                Log.d(TAG, "Book added to collection successfully")
-                BooksActionResult.Success("Book added to collection")
+                Log.d(TAG, "addBookToCollection - Response: ${response.body}")
+                try {
+                    // Parse the response to verify it was created correctly
+                    val json = JSONObject(response.body)
+                    if (json.getBoolean("success")) {
+                        val data = json.getJSONObject("data")
+                        val createdWishlistStatus = data.optString("wishlist_status", "null")
+                        Log.d(TAG, "Book added successfully - wishlist_status: $createdWishlistStatus")
+
+                        if (createdWishlistStatus == "null") {
+                            Log.w(TAG, "Warning: wishlist_status was saved as null, but request succeeded")
+                        }
+
+                        BooksActionResult.Success("Book added to collection")
+                    } else {
+                        val errorMsg = json.optString("error", "Unknown error")
+                        Log.e(TAG, "API returned success=false: $errorMsg")
+                        BooksActionResult.Error(errorMsg)
+                    }
+                } catch (e: Exception) {
+                    Log.e(TAG, "Failed to parse add book response", e)
+                    Log.e(TAG, "Response was: ${response.body}")
+                    BooksActionResult.Success("Book added to collection") // Still consider success if response code is 2xx
+                }
             }
             else -> {
                 val errorMessage = parseError(response.body)
-                Log.e(TAG, "Add book failed: $errorMessage")
+                Log.e(TAG, "Add book failed with code ${response.code}: $errorMessage")
+                Log.e(TAG, "Request body was: $body")
+                Log.e(TAG, "Response body was: ${response.body}")
                 BooksActionResult.Error(errorMessage)
             }
         }
@@ -343,6 +403,85 @@ class BooksApiService(private val context: Context) {
             "Unable to connect to server."
         }
     }
+
+    sealed class UserBookResult {
+        data class Success(val userBook: UserBook) : UserBookResult()
+        data class Error(val message: String) : UserBookResult()
+    }
+
+    suspend fun getUserBookForBook(bookId: Long, userId: Long): UserBookResult {
+        val response = makeAuthenticatedRequest("user_books/by-book/$bookId", "GET")
+
+        return when {
+            response.isSuccessful() -> {
+                try {
+                    Log.d(TAG, "getUserBookForBook - Response: ${response.body}")
+                    val json = JSONObject(response.body)
+
+                    if (!json.getBoolean("success")) {
+                        return UserBookResult.Error("API returned unsuccessful response")
+                    }
+
+                    val data = json.getJSONObject("data")
+                    val userBooks = data.getJSONArray("userbooks")
+
+                    // Find the UserBook for this specific user
+                    for (i in 0 until userBooks.length()) {
+                        val userBookJson = userBooks.getJSONObject(i)
+                        val userBookUserId = userBookJson.getLong("user_id")
+
+                        if (userBookUserId == userId) {
+                            // Parse the UserBook from JSON
+                            val userBook = parseUserBookFromJson(userBookJson, bookId, userId)
+                            Log.d(TAG, "getUserBookForBook - Found UserBook with wishlist_status: ${userBook.wishlistStatus}")
+                            return UserBookResult.Success(userBook)
+                        }
+                    }
+
+                    UserBookResult.Error("UserBook not found for this user")
+                } catch (e: Exception) {
+                    Log.e(TAG, "Failed to parse getUserBookForBook response", e)
+                    Log.e(TAG, "Response was: ${response.body}")
+                    UserBookResult.Error("Failed to parse user book data: ${e.message}")
+                }
+            }
+            else -> {
+                val errorMessage = parseError(response.body)
+                Log.e(TAG, "getUserBookForBook failed: $errorMessage")
+                UserBookResult.Error(errorMessage)
+            }
+        }
+    }
+    private fun parseUserBookFromJson(json: JSONObject, bookId: Long, userId: Long): UserBook {
+        return UserBook(
+            id = json.getLong("id"),
+            userId = userId,
+            bookId = bookId,
+            readingStatus = when (json.optString("reading_status", "not_started")) {
+                "reading" -> UserBookReadingStatus.READING
+                "read" -> UserBookReadingStatus.READ
+                "abandoned" -> UserBookReadingStatus.ABANDONED
+                else -> UserBookReadingStatus.NOT_STARTED
+            },
+            wishlistStatus = when (json.optString("wishlist_status")) {
+                "wish" -> UserBookWishlistStatus.WISH
+                "on_the_way" -> UserBookWishlistStatus.ON_THE_WAY
+                "obtained" -> UserBookWishlistStatus.OBTAINED
+                else -> null
+            },
+            personalRating = json.optInt("personal_rating").takeIf { it != 0 },
+            review = json.optString("review").takeIf { it.isNotBlank() },
+            annotations = json.optString("annotations").takeIf { it.isNotBlank() },
+            readingProgress = json.optInt("reading_progress", 0),
+            dateStarted = null, // Would need date parsing if needed
+            dateFinished = null, // Would need date parsing if needed
+            favorite = json.optInt("favorite", 0) == 1,
+            createdAt = java.util.Date(), // Default to current date
+            updatedAt = java.util.Date()  // Default to current date
+        )
+    }
+
+
 }
 
 /**
