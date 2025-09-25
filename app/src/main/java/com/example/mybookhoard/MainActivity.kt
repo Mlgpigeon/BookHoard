@@ -3,7 +3,10 @@ package com.example.mybookhoard
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -13,6 +16,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import com.example.bookhoard.ui.components.BottomNavigationBar
 import com.example.mybookhoard.api.auth.AuthApi
 import com.example.mybookhoard.api.auth.AuthState
 import com.example.mybookhoard.repositories.AuthRepository
@@ -52,7 +56,20 @@ class MainActivity : ComponentActivity() {
                     }
                     composable("profile") {
                         val user = (state as? AuthState.Authenticated)?.user
-                        if (user != null) ProfileScreen(user, onLogout = { vm.logout() })
+                        if (user != null) {
+                            Scaffold(
+                                bottomBar = {
+                                    BottomNavigationBar(
+                                        isProfileSelected = true,
+                                        onProfileClick = { /* Already on profile */ }
+                                    )
+                                }
+                            ) { paddingValues ->
+                                Box(modifier = androidx.compose.ui.Modifier.padding(paddingValues)) {
+                                    ProfileScreen(user, onLogout = { vm.logout() })
+                                }
+                            }
+                        }
                     }
                 }
 
