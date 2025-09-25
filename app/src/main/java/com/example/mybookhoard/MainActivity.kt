@@ -27,7 +27,7 @@ class MainActivity : ComponentActivity() {
 
         val prefs = UserPreferences(this)
         val api = AuthApi(this)
-        val repo = AuthRepository(api,prefs)
+        val repo = AuthRepository(api, prefs)
 
         val factory = object : ViewModelProvider.Factory {
             override fun <T : ViewModel> create(modelClass: Class<T>): T {
@@ -56,12 +56,29 @@ class MainActivity : ComponentActivity() {
                     }
                 }
 
+                // Handle navigation based on auth state changes
                 LaunchedEffect(state) {
                     when (state) {
-                        is AuthState.Authenticated -> nav.navigate("profile") {
-                            popUpTo("auth") { inclusive = true }
+                        is AuthState.Authenticated -> {
+                            nav.navigate("profile") {
+                                popUpTo("auth") { inclusive = true }
+                            }
                         }
-                        else -> {}
+                        is AuthState.NotAuthenticated -> {
+                            // Navigate back to auth screen on logout
+                            nav.navigate("auth") {
+                                popUpTo("profile") { inclusive = true }
+                            }
+                        }
+                        is AuthState.Error -> {
+                            // Stay on auth screen for errors
+                            nav.navigate("auth") {
+                                popUpTo("profile") { inclusive = true }
+                            }
+                        }
+                        is AuthState.Authenticating -> {
+                            // No navigation needed during authentication
+                        }
                     }
                 }
             }

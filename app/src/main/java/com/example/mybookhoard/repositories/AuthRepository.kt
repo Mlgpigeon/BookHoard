@@ -6,13 +6,31 @@ import com.example.mybookhoard.api.auth.AuthResult
 import com.example.mybookhoard.api.auth.AuthState
 import com.example.mybookhoard.data.auth.UserPreferences
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.first
 
 class AuthRepository(private val api: AuthApi,
                      private val prefs: UserPreferences) {
 
     private val _authState = MutableStateFlow<AuthState>(AuthState.NotAuthenticated)
+    val authState: StateFlow<AuthState> = _authState
 
-    private val TAG = "AuthRepository";
+    private val TAG = "AuthRepository"
+
+    // NEW: Initialize authentication state on repository creation
+    suspend fun initializeAuthState() {
+        Log.d(TAG, "Initializing authentication state...")
+
+        // Check if there's a saved session
+        val savedSession = api.getSavedSession()
+        if (savedSession is AuthResult.Success) {
+            Log.d(TAG, "Found saved session for user: ${savedSession.user.username}")
+            _authState.value = AuthState.Authenticated(savedSession.user, savedSession.token)
+        } else {
+            Log.d(TAG, "No saved session found")
+            _authState.value = AuthState.NotAuthenticated
+        }
+    }
 
     suspend fun login(username: String, password: String): AuthResult {
         _authState.value = AuthState.Authenticating
@@ -49,8 +67,9 @@ class AuthRepository(private val api: AuthApi,
     }
 
     suspend fun logout() {
-        val token = prefs.token
+        Log.d(TAG, "Logging out user")
+        api.clearUserSession()
         prefs.clear()
-        // opcional: AuthApi.logout(token)
+        _authState.value = AuthState.NotAuthenticated
     }
 }
