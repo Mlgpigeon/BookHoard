@@ -8,15 +8,15 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import com.example.mybookhoard.api.books.BooksApiService
+import com.example.mybookhoard.api.books.UserBooksApiService
 import com.example.mybookhoard.api.books.BooksSearchResult
-import com.example.mybookhoard.api.books.ApiBook
 import com.example.mybookhoard.api.books.BooksActionResult
-import com.example.mybookhoard.data.entities.*
-import kotlinx.coroutines.delay
 import com.example.mybookhoard.api.books.UserBookResult
+import com.example.mybookhoard.data.entities.*
 
 class SearchViewModel(
     private val booksApiService: BooksApiService,
+    private val userBooksApiService: UserBooksApiService,
     private val currentUserId: Long
 ) : ViewModel() {
 
@@ -85,7 +85,7 @@ class SearchViewModel(
                     val booksWithUserData = result.books.map { apiBook ->
                         val book = apiBook.toBookEntity()
 
-                        // 🔧 FIXED: Get real UserBook data instead of hardcoded values
+                        // Get real UserBook data instead of hardcoded values
                         val userBook = if (apiBook.canBeAdded == false) {
                             // If canBeAdded is false, get the actual user_book data from API
                             getUserBookForBook(book.id)
@@ -111,7 +111,7 @@ class SearchViewModel(
 
     private suspend fun getUserBookForBook(bookId: Long): UserBook? {
         return try {
-            when (val result = booksApiService.getUserBookForBook(bookId, currentUserId)) {
+            when (val result = userBooksApiService.getUserBookForBook(bookId, currentUserId)) {
                 is UserBookResult.Success -> {
                     Log.d("SearchViewModel", "Got real UserBook data - wishlist_status: ${result.userBook.wishlistStatus}")
                     result.userBook
@@ -139,7 +139,7 @@ class SearchViewModel(
                 Log.d("SearchViewModel", "Adding book to collection: ${book.title} with status: ${wishlistStatus.name}")
 
                 // Call the corrected API method that creates user_book relationship
-                when (val result = booksApiService.addBookToCollection(
+                when (val result = userBooksApiService.addBookToCollection(
                     bookId = book.id,
                     wishlistStatus = wishlistStatus.name
                 )) {
@@ -174,7 +174,7 @@ class SearchViewModel(
     fun removeBookFromCollection(bookId: Long) {
         viewModelScope.launch {
             try {
-                when (val result = booksApiService.removeBookFromCollection(bookId)) {
+                when (val result = userBooksApiService.removeBookFromCollection(bookId)) {
                     is BooksActionResult.Success -> {
                         // Refresh search results to update the button state
                         if (lastSearchQuery.isNotBlank()) {

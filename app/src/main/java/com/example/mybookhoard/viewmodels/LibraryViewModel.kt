@@ -3,8 +3,7 @@ package com.example.mybookhoard.viewmodels
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.mybookhoard.api.books.ApiBook
-import com.example.mybookhoard.api.books.BooksApiService
+import com.example.mybookhoard.api.books.UserBooksApiService
 import com.example.mybookhoard.api.books.LibraryResult
 import com.example.mybookhoard.api.books.UserBookResult
 import kotlinx.coroutines.flow.*
@@ -17,7 +16,7 @@ class LibraryViewModel(
     private val userBookRepository: UserBookRepository,
     private val bookRepository: BookRepository,
     private val userId: Long,
-    private val booksApiService: BooksApiService,
+    private val userBooksApiService: UserBooksApiService,
 ) : ViewModel() {
 
     companion object {
@@ -68,15 +67,15 @@ class LibraryViewModel(
             _isLoading.value = true
             _error.value = null
             try {
-                // 🔥 OPTIMIZADO: Una sola llamada a la API que trae todo
-                when (val result = booksApiService.getUserBooksWithDetails(userId)) {
+                // Optimized: Single API call that fetches everything
+                when (val result = userBooksApiService.getUserBooksWithDetails(userId)) {
                     is LibraryResult.Success -> {
                         Log.d(TAG, "Loaded ${result.items.size} library items in single API call")
 
-                        // Convertir LibraryItems a BookWithUserData
+                        // Convert LibraryItems to BookWithUserData
                         val allBooksWithUserData = result.items.map { it.toBookWithUserData() }
 
-                        // Filtrado por estados - Solo libros OBTAINED van a "My Library"
+                        // Filter by states - Only OBTAINED books go to "My Library"
                         val obtainedBooks = allBooksWithUserData.filter {
                             it.userBook?.wishlistStatus == UserBookWishlistStatus.OBTAINED
                         }
@@ -94,7 +93,7 @@ class LibraryViewModel(
                                     it.userBook?.readingStatus == null
                         }
 
-                        // Datos para pestaña Wishlist
+                        // Data for Wishlist tab
                         _wishlistBooks.value = allBooksWithUserData.filter {
                             it.userBook?.wishlistStatus == UserBookWishlistStatus.WISH
                         }
@@ -103,7 +102,7 @@ class LibraryViewModel(
                             it.userBook?.wishlistStatus == UserBookWishlistStatus.ON_THE_WAY
                         }
 
-                        // Estadísticas actualizadas
+                        // Updated statistics
                         _libraryStats.value = LibraryStats(
                             totalBooks = obtainedBooks.size,
                             readBooks = _readBooks.value.size,
@@ -132,20 +131,19 @@ class LibraryViewModel(
         }
     }
 
-
     fun updateReadingStatus(bookId: Long, newStatus: UserBookReadingStatus) {
         viewModelScope.launch {
             try {
-                // Buscar el UserBook que corresponda al bookId
-                val userBooks = booksApiService.getUserBooksForUser(userId)
+                // Find the UserBook that corresponds to the bookId
+                val userBooks = userBooksApiService.getUserBooksForUser(userId)
                 val userBook = userBooks.find { it.bookId == bookId }
                 if (userBook == null) {
                     Log.w(TAG, "updateReadingStatus - no userBook found for bookId=$bookId")
                     return@launch
                 }
 
-                // Llamar a la API
-                val result = booksApiService.updateUserBookStatus(
+                // Call the API
+                val result = userBooksApiService.updateUserBookStatus(
                     userBookId = userBook.id,
                     newReading = newStatus,
                     newWishlist = userBook.wishlistStatus
@@ -166,14 +164,14 @@ class LibraryViewModel(
     fun updateWishlistStatus(bookId: Long, newStatus: UserBookWishlistStatus?) {
         viewModelScope.launch {
             try {
-                val userBooks = booksApiService.getUserBooksForUser(userId)
+                val userBooks = userBooksApiService.getUserBooksForUser(userId)
                 val userBook = userBooks.find { it.bookId == bookId }
                 if (userBook == null) {
                     Log.w(TAG, "updateWishlistStatus - no userBook found for bookId=$bookId")
                     return@launch
                 }
 
-                val result = booksApiService.updateUserBookStatus(
+                val result = userBooksApiService.updateUserBookStatus(
                     userBookId = userBook.id,
                     newReading = userBook.readingStatus,
                     newWishlist = newStatus

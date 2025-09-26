@@ -19,6 +19,7 @@ import androidx.navigation.compose.rememberNavController
 import com.example.mybookhoard.api.auth.AuthApi
 import com.example.mybookhoard.api.auth.AuthState
 import com.example.mybookhoard.api.books.BooksApiService
+import com.example.mybookhoard.api.books.UserBooksApiService
 import com.example.mybookhoard.components.navigation.BottomNavigationBar
 import com.example.mybookhoard.repositories.AuthRepository
 import com.example.mybookhoard.repositories.UserBookRepository
@@ -40,8 +41,9 @@ class MainActivity : ComponentActivity() {
         val authApi = AuthApi(this)
         val authRepository = AuthRepository(authApi, prefs)
 
-        // Initialize API service
+        // Initialize modularized API services
         val booksApiService = BooksApiService(this)
+        val userBooksApiService = UserBooksApiService(this)
 
         // Initialize repositories
         val userBookRepository = UserBookRepository.getInstance(this)
@@ -59,6 +61,7 @@ class MainActivity : ComponentActivity() {
                 @Suppress("UNCHECKED_CAST")
                 return SearchViewModel(
                     booksApiService = booksApiService,
+                    userBooksApiService = userBooksApiService,
                     currentUserId = getCurrentUserId()
                 ) as T
             }
@@ -71,7 +74,7 @@ class MainActivity : ComponentActivity() {
                     userBookRepository = userBookRepository,
                     bookRepository = bookRepository,
                     userId = getCurrentUserId(),
-                    booksApiService = booksApiService
+                    userBooksApiService = userBooksApiService
                 ) as T
             }
         }
