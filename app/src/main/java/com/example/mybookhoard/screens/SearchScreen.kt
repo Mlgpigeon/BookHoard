@@ -3,6 +3,8 @@ package com.example.mybookhoard.screens
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -18,7 +20,8 @@ import com.example.mybookhoard.viewmodels.SearchViewModel
 
 @Composable
 fun SearchScreen(
-    searchViewModel: SearchViewModel = viewModel()
+    searchViewModel: SearchViewModel = viewModel(),
+    onAddBookClick: () -> Unit = {}
 ) {
     val uiState by searchViewModel.uiState.collectAsState()
     val searchQuery by searchViewModel.searchQuery.collectAsState()
@@ -29,17 +32,34 @@ fun SearchScreen(
             .fillMaxSize()
             .padding(16.dp)
     ) {
-        SearchBar(
-            query = searchQuery,
-            onQueryChange = { searchViewModel.updateSearchQuery(it) },
-            onSearch = { searchViewModel.performSearch() },
-            suggestions = suggestions,
-            onSuggestionSelected = { suggestion ->
-                searchViewModel.selectSuggestion(suggestion)
-            },
+        // Search bar with add button
+        Row(
             modifier = Modifier.fillMaxWidth(),
-            placeholder = "Search books in API..."
-        )
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            SearchBar(
+                query = searchQuery,
+                onQueryChange = { searchViewModel.updateSearchQuery(it) },
+                onSearch = { searchViewModel.performSearch() },
+                suggestions = suggestions,
+                onSuggestionSelected = { suggestion ->
+                    searchViewModel.selectSuggestion(suggestion)
+                },
+                modifier = Modifier.weight(1f),
+                placeholder = "Search books in API..."
+            )
+
+            FloatingActionButton(
+                onClick = onAddBookClick,
+                modifier = Modifier.size(56.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Add,
+                    contentDescription = "Add Book"
+                )
+            }
+        }
 
         Spacer(modifier = Modifier.height(16.dp))
 

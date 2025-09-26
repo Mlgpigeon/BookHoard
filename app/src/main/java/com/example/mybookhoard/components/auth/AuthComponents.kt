@@ -139,7 +139,7 @@ fun AuthHeader() {
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Text(
-            text = "📚 BookHoard",
+            text = "📚 My BookHoard",
             style = MaterialTheme.typography.headlineLarge,
             fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.primary

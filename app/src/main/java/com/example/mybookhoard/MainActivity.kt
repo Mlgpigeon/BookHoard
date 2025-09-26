@@ -20,6 +20,7 @@ import com.example.mybookhoard.api.auth.AuthApi
 import com.example.mybookhoard.api.auth.AuthState
 import com.example.mybookhoard.api.books.BooksApiService
 import com.example.mybookhoard.api.books.UserBooksApiService
+import com.example.mybookhoard.api.books.BooksCreationApiService
 import com.example.mybookhoard.components.navigation.BottomNavigationBar
 import com.example.mybookhoard.repositories.AuthRepository
 import com.example.mybookhoard.repositories.UserBookRepository
@@ -29,9 +30,11 @@ import com.example.mybookhoard.screens.AuthScreen
 import com.example.mybookhoard.screens.ProfileScreen
 import com.example.mybookhoard.screens.SearchScreen
 import com.example.mybookhoard.screens.LibraryScreen
+import com.example.mybookhoard.screens.AddBookScreen
 import com.example.mybookhoard.viewmodels.AuthViewModel
 import com.example.mybookhoard.viewmodels.SearchViewModel
 import com.example.mybookhoard.viewmodels.LibraryViewModel
+import com.example.mybookhoard.viewmodels.AddBookViewModel
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -44,6 +47,7 @@ class MainActivity : ComponentActivity() {
         // Initialize modularized API services
         val booksApiService = BooksApiService(this)
         val userBooksApiService = UserBooksApiService(this)
+        val booksCreationApiService = BooksCreationApiService(this)
 
         // Initialize repositories
         val userBookRepository = UserBookRepository.getInstance(this)
@@ -79,6 +83,15 @@ class MainActivity : ComponentActivity() {
             }
         }
 
+        val addBookFactory = object : ViewModelProvider.Factory {
+            override fun <T : ViewModel> create(modelClass: Class<T>): T {
+                @Suppress("UNCHECKED_CAST")
+                return AddBookViewModel(
+                    booksCreationApiService = booksCreationApiService
+                ) as T
+            }
+        }
+
         setContent {
             MaterialTheme {
                 val nav = rememberNavController()
@@ -109,9 +122,28 @@ class MainActivity : ComponentActivity() {
                                 }
                             ) { paddingValues ->
                                 Box(modifier = androidx.compose.ui.Modifier.padding(paddingValues)) {
-                                    SearchScreen(searchViewModel = searchVm)
+                                    SearchScreen(
+                                        searchViewModel = searchVm,
+                                        onAddBookClick = { nav.navigate("add_book") }
+                                    )
                                 }
                             }
+                        }
+                    }
+
+                    composable("add_book") {
+                        val addBookVm: AddBookViewModel = viewModel(factory = addBookFactory)
+                        val user = (authState as? AuthState.Authenticated)?.user
+                        if (user != null) {
+                            AddBookScreen(
+                                onNavigateBack = { nav.navigateUp() },
+                                onBookCreated = {
+                                    nav.navigateUp()
+                                    // Optionally navigate to library to see the new book
+                                    nav.navigate("library")
+                                },
+                                addBookViewModel = addBookVm
+                            )
                         }
                     }
 
@@ -170,6 +202,7 @@ class MainActivity : ComponentActivity() {
                                 popUpTo("search") { inclusive = true }
                                 popUpTo("library") { inclusive = true }
                                 popUpTo("profile") { inclusive = true }
+                                popUpTo("add_book") { inclusive = true }
                             }
                         }
                         is AuthState.Error -> {
@@ -177,6 +210,7 @@ class MainActivity : ComponentActivity() {
                                 popUpTo("search") { inclusive = true }
                                 popUpTo("library") { inclusive = true }
                                 popUpTo("profile") { inclusive = true }
+                                popUpTo("add_book") { inclusive = true }
                             }
                         }
                         is AuthState.Authenticating -> {
