@@ -2,6 +2,8 @@ package com.example.mybookhoard.api.books
 
 import android.content.Context
 import android.util.Log
+import com.example.mybookhoard.data.entities.Book
+import com.example.mybookhoard.data.entities.BookSource
 import com.example.mybookhoard.data.entities.UserBook
 import com.example.mybookhoard.data.entities.UserBookReadingStatus
 import com.example.mybookhoard.data.entities.UserBookWishlistStatus
@@ -430,4 +432,103 @@ class BooksApiService(private val context: Context) {
             false
         }
     }
+    suspend fun getUserBooksWithDetails(userId: Long): LibraryResult {
+        val response = apiClient.makeAuthenticatedRequest("user_books/with-details/$userId", "GET")
+
+        return when {
+            response.isSuccessful() -> {
+                try {
+                    Log.d(TAG, "getUserBooksWithDetails - Response: ${response.body}")
+                    val json = JSONObject(response.body)
+
+                    if (!json.getBoolean("success")) {
+                        return LibraryResult.Error("API returned unsuccessful response")
+                    }
+
+                    val data = json.getJSONObject("data")
+                    val userBooksArray = data.getJSONArray("user_books_with_details")
+                    val totalCount = data.getInt("total_count")
+
+                    val libraryItems = mutableListOf<LibraryItem>()
+
+                    for (i in 0 until userBooksArray.length()) {
+                        try {
+                            val item = userBooksArray.getJSONObject(i)
+                            val userBookJson = item.getJSONObject("userbook")
+                            val bookJson = item.getJSONObject("book")
+
+                            // Parse UserBook
+                            val userBook = UserBookParser.parseUserBookFromJson(
+                                userBookJson,
+                                bookJson.getLong("id"),
+                                userBookJson.getLong("user_id")
+                            )
+
+                            // Parse Book with author info included
+                            val book = parseBookFromDetailedJson(bookJson)
+
+                            libraryItems.add(
+                                LibraryItem(
+                                    book = book,
+                                    userBook = userBook,
+                                    authorName = bookJson.optString("author").takeIf { it.isNotBlank() }
+                                )
+                            )
+
+                        } catch (e: Exception) {
+                            Log.w(TAG, "Failed to parse library item at index $i: ${e.message}")
+                        }
+                    }
+
+                    Log.d(TAG, "Successfully loaded ${libraryItems.size} library items")
+                    LibraryResult.Success(libraryItems, totalCount)
+
+                } catch (e: Exception) {
+                    Log.e(TAG, "Failed to parse getUserBooksWithDetails response", e)
+                    LibraryResult.Error("Failed to parse library data: ${e.message}")
+                }
+            }
+            else -> {
+                val errorMessage = apiClient.parseError(response.body)
+                Log.e(TAG, "getUserBooksWithDetails failed: $errorMessage")
+                LibraryResult.Error(errorMessage)
+            }
+        }
+    }
+    private fun parseBookFromDetailedJson(bookJson: JSONObject): Book {
+        return Book(
+            id = bookJson.getLong("id"),
+            title = bookJson.getString("title"),
+            originalTitle = bookJson.optString("original_title").takeIf { it.isNotBlank() },
+            description = bookJson.optString("description").takeIf { it.isNotBlank() },
+            primaryAuthorId = bookJson.optLong("primary_author_id", 0).takeIf { it != 0L },
+            sagaId = bookJson.optLong("saga_id", 0).takeIf { it != 0L },
+            sagaNumber = bookJson.optInt("saga_number", 0).takeIf { it != 0 },
+            language = bookJson.optString("language", "en"),
+            publicationYear = bookJson.optInt("publication_year", 0).takeIf { it != 0 },
+            genres = bookJson.optJSONArray("genres")?.let { array ->
+                (0 until array.length()).map { array.getString(it) }
+            },
+            isbn = bookJson.optString("isbn").takeIf { it.isNotBlank() },
+            coverSelected = bookJson.optString("cover_selected").takeIf { it.isNotBlank() },
+            images = bookJson.optJSONArray("images")?.let { array ->
+                (0 until array.length()).map { array.getString(it) }
+            },
+            adaptations = bookJson.optJSONArray("adaptations")?.let { array ->
+                (0 until array.length()).map { array.getString(it) }
+            },
+            averageRating = bookJson.optDouble("average_rating", 0.0).toFloat(),
+            totalRatings = bookJson.optInt("total_ratings", 0),
+            isPublic = bookJson.optBoolean("is_public", true),
+            source = when (bookJson.optString("source", "user_defined")) {
+                "google_books_api" -> BookSource.GOOGLE_BOOKS_API
+                "openlibrary_api" -> BookSource.OPENLIBRARY_API
+                else -> BookSource.USER_DEFINED
+            },
+            createdAt = java.util.Date(),
+            updatedAt = java.util.Date()
+        )
+    }
+
+
 }

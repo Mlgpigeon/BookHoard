@@ -27,7 +27,9 @@ class BooksApiClient(private val context: Context) {
         private const val READ_TIMEOUT = 15_000
         private const val REQUEST_TIMEOUT = 20_000L
     }
-
+    fun extractErrorMessage(responseBody: String): String {
+        return parseError(responseBody)
+    }
     /**
      * Make authenticated request to the API
      */
