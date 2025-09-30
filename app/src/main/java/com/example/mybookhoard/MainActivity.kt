@@ -10,6 +10,8 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -21,7 +23,9 @@ import com.example.mybookhoard.api.auth.AuthState
 import com.example.mybookhoard.api.books.BooksApiService
 import com.example.mybookhoard.api.books.UserBooksApiService
 import com.example.mybookhoard.api.books.BooksCreationApiService
+import com.example.mybookhoard.api.books.SagasApiService
 import com.example.mybookhoard.components.navigation.BottomNavigationBar
+import com.example.mybookhoard.components.sagas.BookPickerDialog
 import com.example.mybookhoard.repositories.AuthRepository
 import com.example.mybookhoard.repositories.UserBookRepository
 import com.example.mybookhoard.repositories.BookRepository
@@ -31,10 +35,13 @@ import com.example.mybookhoard.screens.ProfileScreen
 import com.example.mybookhoard.screens.SearchScreen
 import com.example.mybookhoard.screens.LibraryScreen
 import com.example.mybookhoard.screens.AddBookScreen
+import com.example.mybookhoard.screens.SagaEditorScreen
+import com.example.mybookhoard.screens.SagasManagementScreen
 import com.example.mybookhoard.viewmodels.AuthViewModel
 import com.example.mybookhoard.viewmodels.SearchViewModel
 import com.example.mybookhoard.viewmodels.LibraryViewModel
 import com.example.mybookhoard.viewmodels.AddBookViewModel
+import com.example.mybookhoard.viewmodels.SagasViewModel
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -88,6 +95,17 @@ class MainActivity : ComponentActivity() {
                 @Suppress("UNCHECKED_CAST")
                 return AddBookViewModel(
                     booksCreationApiService = booksCreationApiService
+                ) as T
+            }
+        }
+        val sagasApiService = SagasApiService(this)
+
+        val sagasFactory = object : ViewModelProvider.Factory {
+            override fun <T : ViewModel> create(modelClass: Class<T>): T {
+                @Suppress("UNCHECKED_CAST")
+                return SagasViewModel(
+                    sagasApiService = sagasApiService,
+                    booksApiService = booksApiService
                 ) as T
             }
         }
@@ -168,6 +186,104 @@ class MainActivity : ComponentActivity() {
                         }
                     }
 
+                    composable("sagas") {
+                        val sagasVm: SagasViewModel = viewModel(factory = sagasFactory)
+                        val user = (authState as? AuthState.Authenticated)?.user
+                        if (user != null) {
+                            SagasManagementScreen(
+                                onNavigateBack = { nav.navigateUp() },
+                                onNavigateToEditor = { sagaId ->
+                                    if (sagaId != null) {
+                                        nav.navigate("sagas/edit/$sagaId")
+                                    } else {
+                                        nav.navigate("sagas/create")
+                                    }
+                                },
+                                sagasViewModel = sagasVm
+                            )
+                        }
+                    }
+
+                    composable("sagas/create") {
+                        val sagasVm: SagasViewModel = viewModel(factory = sagasFactory)
+                        val booksVm: SearchViewModel = viewModel(factory = searchFactory)
+                        var showBookPicker by remember { mutableStateOf(false) }
+
+                        SagaEditorScreen(
+                            sagaId = null,
+                            onNavigateBack = { nav.navigateUp() },
+                            onNavigateToBookPicker = { showBookPicker = true },
+                            onSagaSaved = { nav.navigateUp() },
+                            sagasViewModel = sagasVm
+                        )
+
+                        // Book picker dialog
+                        if (showBookPicker) {
+                            val searchUiState by booksVm.uiState.collectAsState()
+                            val books = when (val state = searchUiState) {
+                                is SearchViewModel.SearchUiState.Success -> state.books.map { it.book }
+                                else -> emptyList()
+                            }
+
+                            BookPickerDialog(
+                                onDismiss = { showBookPicker = false },
+                                onBookSelected = { book ->
+                                    sagasVm.addBookToSaga(book)
+                                },
+                                availableBooks = books,
+                                isLoading = searchUiState is SearchViewModel.SearchUiState.Loading,
+                                onSearch = { query ->
+                                    if (query.isNotBlank()) {
+                                        booksVm.updateSearchQuery(query)
+                                        booksVm.performSearch()
+                                    }
+                                }
+                            )
+                        }
+                    }
+
+                    composable("sagas/edit/{sagaId}") { backStackEntry ->
+                        val sagaId = backStackEntry.arguments?.getString("sagaId")?.toLongOrNull()
+                        val sagasVm: SagasViewModel = viewModel(factory = sagasFactory)
+                        val booksVm: SearchViewModel = viewModel(factory = searchFactory)
+                        var showBookPicker by remember { mutableStateOf(false) }
+
+                        if (sagaId != null) {
+                            SagaEditorScreen(
+                                sagaId = sagaId,
+                                onNavigateBack = { nav.navigateUp() },
+                                onNavigateToBookPicker = { showBookPicker = true },
+                                onSagaSaved = { nav.navigateUp() },
+                                sagasViewModel = sagasVm
+                            )
+
+                            // Book picker dialog
+                            if (showBookPicker) {
+                                val searchUiState by booksVm.uiState.collectAsState()
+                                val books = when (val state = searchUiState) {
+                                    is SearchViewModel.SearchUiState.Success -> state.books.map { it.book }
+                                    else -> emptyList()
+                                }
+
+                                BookPickerDialog(
+                                    onDismiss = { showBookPicker = false },
+                                    onBookSelected = { book ->
+                                        sagasVm.addBookToSaga(book)
+                                    },
+                                    availableBooks = books,
+                                    isLoading = searchUiState is SearchViewModel.SearchUiState.Loading,
+                                    onSearch = { query ->
+                                        if (query.isNotBlank()) {
+                                            booksVm.updateSearchQuery(query)
+                                            booksVm.performSearch()
+                                        }
+                                    }
+                                )
+                            }
+                        }
+                    }
+
+// Update the profile composable to include navigation to sagas:
                     composable("profile") {
                         val user = (authState as? AuthState.Authenticated)?.user
                         if (user != null) {
@@ -182,7 +298,11 @@ class MainActivity : ComponentActivity() {
                                 }
                             ) { paddingValues ->
                                 Box(modifier = androidx.compose.ui.Modifier.padding(paddingValues)) {
-                                    ProfileScreen(user, onLogout = { authVm.logout() })
+                                    ProfileScreen(
+                                        user = user,
+                                        onLogout = { authVm.logout() },
+                                        onNavigateToSagas = { nav.navigate("sagas") }
+                                    )
                                 }
                             }
                         }
@@ -226,4 +346,6 @@ class MainActivity : ComponentActivity() {
         val prefs = getSharedPreferences("bookhoard_auth", MODE_PRIVATE)
         return prefs.getLong("user_id", -1L)
     }
+
+
 }
