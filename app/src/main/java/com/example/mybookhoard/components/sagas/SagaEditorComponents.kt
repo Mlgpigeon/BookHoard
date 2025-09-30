@@ -1,145 +1,30 @@
 package com.example.mybookhoard.components.sagas
 
-import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import com.example.mybookhoard.data.entities.Book
 import com.example.mybookhoard.viewmodels.SagasViewModel
 
 /**
- * Draggable book card in saga editor
- */
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun DraggableBookCard(
-    book: Book,
-    order: Int,
-    onRemove: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    var dragOffset by remember { mutableStateOf(Offset.Zero) }
-    var isDragging by remember { mutableStateOf(false) }
-
-    ElevatedCard(
-        modifier = modifier
-            .fillMaxWidth()
-            .graphicsLayer {
-                translationX = if (isDragging) dragOffset.x else 0f
-                translationY = if (isDragging) dragOffset.y else 0f
-                alpha = if (isDragging) 0.8f else 1f
-            }
-            .pointerInput(Unit) {
-                detectDragGesturesAfterLongPress(
-                    onDragStart = { isDragging = true },
-                    onDragEnd = {
-                        isDragging = false
-                        dragOffset = Offset.Zero
-                    },
-                    onDragCancel = {
-                        isDragging = false
-                        dragOffset = Offset.Zero
-                    },
-                    onDrag = { change, dragAmount ->
-                        change.consume()
-                        dragOffset += dragAmount
-                    }
-                )
-            }
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            // Drag handle
-            Icon(
-                imageVector = Icons.Default.DragHandle,
-                contentDescription = "Drag to reorder",
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.size(24.dp)
-            )
-
-            // Order number
-            Surface(
-                shape = MaterialTheme.shapes.small,
-                color = MaterialTheme.colorScheme.primaryContainer,
-                modifier = Modifier.size(32.dp)
-            ) {
-                Box(
-                    contentAlignment = Alignment.Center,
-                    modifier = Modifier.fillMaxSize()
-                ) {
-                    Text(
-                        text = "$order",
-                        style = MaterialTheme.typography.labelLarge,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer
-                    )
-                }
-            }
-
-            // Book info
-            Column(
-                modifier = Modifier.weight(1f)
-            ) {
-                Text(
-                    text = book.title,
-                    style = MaterialTheme.typography.bodyLarge,
-                    fontWeight = FontWeight.Medium,
-                    maxLines = 2
-                )
-
-                book.primaryAuthorId?.let {
-                    Text(
-                        text = "By author ID: $it",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            }
-
-            // Remove button
-            IconButton(onClick = onRemove) {
-                Icon(
-                    imageVector = Icons.Default.Close,
-                    contentDescription = "Remove from saga",
-                    tint = MaterialTheme.colorScheme.error
-                )
-            }
-        }
-    }
-}
-
-/**
- * Add book button at the end of the list
+ * Add book button for saga editor
  */
 @Composable
 fun AddBookButton(
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    OutlinedCard(
+    OutlinedButton(
         onClick = onClick,
-        modifier = modifier.fillMaxWidth()
+        modifier = modifier.fillMaxWidth(),
+        contentPadding = PaddingValues(vertical = 16.dp)
     ) {
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
             horizontalArrangement = Arrangement.Center,
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -236,7 +121,7 @@ fun SagaBooksEditor(
     modifier: Modifier = Modifier
 ) {
     Column(
-        modifier = modifier.fillMaxWidth(),
+        modifier = modifier,
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         // Header with count
@@ -300,11 +185,12 @@ fun SagaBooksEditor(
                 }
             }
         } else {
-            // Draggable books list
+            // Draggable books list - takes remaining space
             DraggableBooksList(
                 books = books,
                 onRemoveBook = onRemoveBook,
-                onReorder = onReorder
+                onReorder = onReorder,
+                modifier = Modifier.weight(1f)
             )
 
             // Drag instruction

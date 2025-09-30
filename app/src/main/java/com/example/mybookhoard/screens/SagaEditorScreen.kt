@@ -1,7 +1,6 @@
 package com.example.mybookhoard.screens
+
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -35,7 +34,6 @@ fun SagaEditorScreen(
     var description by remember { mutableStateOf("") }
     var isCompleted by remember { mutableStateOf(false) }
 
-    val scrollState = rememberScrollState()
     val snackbarHostState = remember { SnackbarHostState() }
 
     val isEditing = sagaId != null
@@ -55,6 +53,27 @@ fun SagaEditorScreen(
             name = saga.name
             description = saga.description ?: ""
             isCompleted = saga.isCompleted
+        }
+    }
+
+    // Show error messages
+    LaunchedEffect(error) {
+        error?.let { errorMsg ->
+            snackbarHostState.showSnackbar(
+                message = errorMsg,
+                duration = SnackbarDuration.Short
+            )
+        }
+    }
+
+    // Handle successful save
+    LaunchedEffect(uiState) {
+        if (uiState is SagasViewModel.SagaUiState.Success) {
+            snackbarHostState.showSnackbar(
+                message = if (isEditing) "Saga updated successfully" else "Saga created successfully",
+                duration = SnackbarDuration.Short
+            )
+            onSagaSaved()
         }
     }
 
@@ -81,11 +100,10 @@ fun SagaEditorScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
-                .verticalScroll(scrollState)
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(24.dp)
         ) {
-            // Saga metadata form
+            // Saga metadata form (non-scrollable section)
             SagaMetadataForm(
                 name = name,
                 onNameChange = { name = it },
@@ -97,7 +115,8 @@ fun SagaEditorScreen(
 
             HorizontalDivider()
 
-            // Books editor with drag & drop
+            // Books editor with drag & drop (scrollable LazyColumn)
+            // Give it weight to take remaining space
             SagaBooksEditor(
                 books = sagaBooks,
                 onRemoveBook = { bookId ->
@@ -106,10 +125,11 @@ fun SagaEditorScreen(
                 onAddBook = onNavigateToBookPicker,
                 onReorder = { fromIndex, toIndex ->
                     sagasViewModel.reorderBooks(fromIndex, toIndex)
-                }
+                },
+                modifier = Modifier.weight(1f)
             )
 
-            // Save button
+            // Save button (fixed at bottom)
             Button(
                 onClick = {
                     if (isEditing && sagaId != null) {
@@ -135,44 +155,13 @@ fun SagaEditorScreen(
             ) {
                 if (isLoading) {
                     CircularProgressIndicator(
-                        modifier = Modifier.size(20.dp),
-                        strokeWidth = 2.dp,
+                        modifier = Modifier.size(24.dp),
                         color = MaterialTheme.colorScheme.onPrimary
                     )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(if (isEditing) "Updating..." else "Creating...")
                 } else {
-                    Icon(
-                        imageVector = Icons.Default.Save,
-                        contentDescription = null,
-                        modifier = Modifier.size(18.dp)
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
                     Text(if (isEditing) "Update Saga" else "Create Saga")
                 }
             }
-        }
-    }
-
-    // Handle UI state changes
-    LaunchedEffect(uiState) {
-        when (val state = uiState) {
-            is SagasViewModel.SagaUiState.Success -> {
-                snackbarHostState.showSnackbar(state.message)
-                onSagaSaved()
-            }
-            is SagasViewModel.SagaUiState.Error -> {
-                snackbarHostState.showSnackbar(state.message)
-            }
-            else -> { /* No action needed */ }
-        }
-    }
-
-    // Handle errors
-    LaunchedEffect(error) {
-        error?.let {
-            snackbarHostState.showSnackbar(it)
-            sagasViewModel.clearError()
         }
     }
 }
