@@ -19,42 +19,60 @@ class SagasApiService(private val context: Context) {
     private val apiClient = BooksApiClient(context)
 
     suspend fun getAllSagas(): SagasResult {
+        Log.d(TAG, "=== getAllSagas() called ===")
         val response = apiClient.makeAuthenticatedRequest("sagas", "GET")
+
+        Log.d(TAG, "Response code: ${response.code}")
+        Log.d(TAG, "Response body: ${response.body}")
 
         return when {
             response.isSuccessful() -> {
                 try {
                     val json = JSONObject(response.body)
+                    Log.d(TAG, "Parsed JSON: $json")
 
                     if (!json.getBoolean("success")) {
+                        Log.e(TAG, "API returned success=false")
                         return SagasResult.Error("API returned unsuccessful response")
                     }
 
                     val data = json.getJSONObject("data")
+                    Log.d(TAG, "Data object: $data")
+
                     val sagasArray = data.getJSONArray("sagas")
+                    Log.d(TAG, "Sagas array length: ${sagasArray.length()}")
 
                     val sagas = mutableListOf<Saga>()
                     for (i in 0 until sagasArray.length()) {
-                        sagas.add(Saga.fromJson(sagasArray.getJSONObject(i)))
+                        val sagaJson = sagasArray.getJSONObject(i)
+                        Log.d(TAG, "Parsing saga $i: $sagaJson")
+                        sagas.add(Saga.fromJson(sagaJson))
                     }
 
-                    Log.d(TAG, "Loaded ${sagas.size} sagas")
+                    Log.d(TAG, "Successfully loaded ${sagas.size} sagas")
                     SagasResult.Success(sagas)
                 } catch (e: Exception) {
                     Log.e(TAG, "Failed to parse sagas", e)
+                    Log.e(TAG, "Response body was: ${response.body}")
                     SagasResult.Error("Failed to parse sagas: ${e.message}")
                 }
             }
             else -> {
                 val errorMessage = apiClient.parseError(response.body)
-                Log.e(TAG, "Get sagas failed: $errorMessage")
+                Log.e(TAG, "Get sagas failed with code ${response.code}")
+                Log.e(TAG, "Error message: $errorMessage")
+                Log.e(TAG, "Full response body: ${response.body}")
                 SagasResult.Error(errorMessage)
             }
         }
     }
 
     suspend fun getSaga(sagaId: Long): SagaResult {
+        Log.d(TAG, "=== getSaga($sagaId) called ===")
         val response = apiClient.makeAuthenticatedRequest("sagas/$sagaId", "GET")
+
+        Log.d(TAG, "Response code: ${response.code}")
+        Log.d(TAG, "Response body: ${response.body}")
 
         return when {
             response.isSuccessful() -> {
@@ -62,6 +80,7 @@ class SagasApiService(private val context: Context) {
                     val json = JSONObject(response.body)
 
                     if (!json.getBoolean("success")) {
+                        Log.e(TAG, "API returned success=false")
                         return SagaResult.Error("API returned unsuccessful response")
                     }
 
@@ -72,6 +91,7 @@ class SagasApiService(private val context: Context) {
                     SagaResult.Success(saga)
                 } catch (e: Exception) {
                     Log.e(TAG, "Failed to parse saga", e)
+                    Log.e(TAG, "Response body was: ${response.body}")
                     SagaResult.Error("Failed to parse saga: ${e.message}")
                 }
             }
@@ -98,8 +118,13 @@ class SagasApiService(private val context: Context) {
             put("is_completed", isCompleted)
         }
 
-        Log.d(TAG, "Creating saga: $body")
+        Log.d(TAG, "=== createSaga() called ===")
+        Log.d(TAG, "Request body: $body")
+
         val response = apiClient.makeAuthenticatedRequest("sagas", "POST", body)
+
+        Log.d(TAG, "Response code: ${response.code}")
+        Log.d(TAG, "Response body: ${response.body}")
 
         return when {
             response.isSuccessful() -> {
@@ -107,22 +132,26 @@ class SagasApiService(private val context: Context) {
                     val json = JSONObject(response.body)
 
                     if (!json.getBoolean("success")) {
+                        Log.e(TAG, "API returned success=false")
                         return SagaResult.Error("API returned unsuccessful response")
                     }
 
                     val data = json.getJSONObject("data")
                     val saga = Saga.fromJson(data)
 
-                    Log.d(TAG, "Created saga: ${saga.name}")
+                    Log.d(TAG, "Created saga: ${saga.name} with id: ${saga.id}")
                     SagaResult.Success(saga)
                 } catch (e: Exception) {
                     Log.e(TAG, "Failed to parse created saga", e)
+                    Log.e(TAG, "Response body was: ${response.body}")
                     SagaResult.Error("Failed to parse saga: ${e.message}")
                 }
             }
             else -> {
                 val errorMessage = apiClient.parseError(response.body)
-                Log.e(TAG, "Create saga failed: $errorMessage")
+                Log.e(TAG, "Create saga failed with code: ${response.code}")
+                Log.e(TAG, "Error message: $errorMessage")
+                Log.e(TAG, "Full response body: ${response.body}")
                 SagaResult.Error(errorMessage)
             }
         }
@@ -144,8 +173,13 @@ class SagasApiService(private val context: Context) {
             isCompleted?.let { put("is_completed", it) }
         }
 
-        Log.d(TAG, "Updating saga $sagaId: $body")
+        Log.d(TAG, "=== updateSaga($sagaId) called ===")
+        Log.d(TAG, "Request body: $body")
+
         val response = apiClient.makeAuthenticatedRequest("sagas/$sagaId", "PUT", body)
+
+        Log.d(TAG, "Response code: ${response.code}")
+        Log.d(TAG, "Response body: ${response.body}")
 
         return when {
             response.isSuccessful() -> {
@@ -175,7 +209,11 @@ class SagasApiService(private val context: Context) {
     }
 
     suspend fun deleteSaga(sagaId: Long): ActionResult {
+        Log.d(TAG, "=== deleteSaga($sagaId) called ===")
         val response = apiClient.makeAuthenticatedRequest("sagas/$sagaId", "DELETE")
+
+        Log.d(TAG, "Response code: ${response.code}")
+        Log.d(TAG, "Response body: ${response.body}")
 
         return when {
             response.isSuccessful() -> {
@@ -191,7 +229,11 @@ class SagasApiService(private val context: Context) {
     }
 
     suspend fun getBooksInSaga(sagaId: Long): BooksResult {
+        Log.d(TAG, "=== getBooksInSaga($sagaId) called ===")
         val response = apiClient.makeAuthenticatedRequest("sagas/books/$sagaId", "GET")
+
+        Log.d(TAG, "Response code: ${response.code}")
+        Log.d(TAG, "Response body: ${response.body}")
 
         return when {
             response.isSuccessful() -> {
@@ -215,6 +257,7 @@ class SagasApiService(private val context: Context) {
                     BooksResult.Success(books)
                 } catch (e: Exception) {
                     Log.e(TAG, "Failed to parse books in saga", e)
+                    Log.e(TAG, "Response body was: ${response.body}")
                     BooksResult.Error("Failed to parse books: ${e.message}")
                 }
             }
@@ -235,8 +278,13 @@ class SagasApiService(private val context: Context) {
             put("book_orders", ordersJson)
         }
 
-        Log.d(TAG, "Updating books order for saga $sagaId: $body")
+        Log.d(TAG, "=== updateBooksOrder($sagaId) called ===")
+        Log.d(TAG, "Request body: $body")
+
         val response = apiClient.makeAuthenticatedRequest("sagas/order/$sagaId", "POST", body)
+
+        Log.d(TAG, "Response code: ${response.code}")
+        Log.d(TAG, "Response body: ${response.body}")
 
         return when {
             response.isSuccessful() -> {

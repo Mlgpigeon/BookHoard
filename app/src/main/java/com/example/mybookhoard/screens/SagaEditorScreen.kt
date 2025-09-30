@@ -7,7 +7,6 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.mybookhoard.components.sagas.SagaMetadataForm
 import com.example.mybookhoard.components.sagas.SagaBooksEditor
 import com.example.mybookhoard.viewmodels.SagasViewModel
@@ -22,7 +21,7 @@ fun SagaEditorScreen(
     onNavigateBack: () -> Unit,
     onNavigateToBookPicker: () -> Unit,
     onSagaSaved: () -> Unit,
-    sagasViewModel: SagasViewModel = viewModel()
+    sagasViewModel: SagasViewModel
 ) {
     val currentSaga by sagasViewModel.currentSaga.collectAsState()
     val sagaBooks by sagasViewModel.sagaBooks.collectAsState()
@@ -38,7 +37,7 @@ fun SagaEditorScreen(
 
     val isEditing = sagaId != null
 
-    // Initialize for editing
+    // Initialize for editing or creating
     LaunchedEffect(sagaId) {
         if (sagaId != null) {
             sagasViewModel.startEditing(sagaId)
@@ -136,31 +135,40 @@ fun SagaEditorScreen(
                         sagasViewModel.updateSaga(
                             sagaId = sagaId,
                             name = name,
-                            description = description,
+                            description = description.ifBlank { null },
                             isCompleted = isCompleted
                         )
                     } else {
                         sagasViewModel.createSaga(
                             name = name,
-                            description = description,
-                            primaryAuthorId = sagaBooks.firstOrNull()?.book?.primaryAuthorId,
+                            description = description.ifBlank { null },
+                            primaryAuthorId = null,
                             isCompleted = isCompleted
                         )
                     }
                 },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(56.dp),
-                enabled = !isLoading && name.isNotBlank() && sagaBooks.isNotEmpty()
+                modifier = Modifier.fillMaxWidth(),
+                enabled = name.isNotBlank() && sagaBooks.isNotEmpty() && !isLoading
             ) {
                 if (isLoading) {
                     CircularProgressIndicator(
-                        modifier = Modifier.size(24.dp),
+                        modifier = Modifier.size(16.dp),
+                        strokeWidth = 2.dp,
                         color = MaterialTheme.colorScheme.onPrimary
                     )
-                } else {
-                    Text(if (isEditing) "Update Saga" else "Create Saga")
+                    Spacer(modifier = Modifier.width(8.dp))
                 }
+                Text(if (isEditing) "Update Saga" else "Create Saga")
+            }
+
+            // Helper text
+            if (sagaBooks.isEmpty()) {
+                Text(
+                    text = "Add at least one book to create the saga",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.padding(horizontal = 16.dp)
+                )
             }
         }
     }

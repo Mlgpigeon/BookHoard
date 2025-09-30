@@ -57,8 +57,9 @@ class SagasViewModel(
         val order: Int
     )
 
+    // Don't load automatically in init, let the screen trigger it
     init {
-        loadSagas()
+        Log.d(TAG, "SagasViewModel initialized")
     }
 
     fun loadSagas() {
@@ -66,6 +67,7 @@ class SagasViewModel(
             _isLoading.value = true
             _error.value = null
 
+            Log.d(TAG, "Loading sagas...")
             when (val result = sagasApiService.getAllSagas()) {
                 is SagasResult.Success -> {
                     _sagas.value = result.sagas
@@ -85,6 +87,7 @@ class SagasViewModel(
         _uiState.value = SagaUiState.Creating
         _currentSaga.value = null
         _sagaBooks.value = emptyList()
+        Log.d(TAG, "Started creating new saga")
     }
 
     fun startEditing(sagaId: Long) {
@@ -92,6 +95,7 @@ class SagasViewModel(
             _isLoading.value = true
             _uiState.value = SagaUiState.Editing(sagaId)
 
+            Log.d(TAG, "Loading saga for editing: $sagaId")
             // Load saga details
             when (val sagaResult = sagasApiService.getSaga(sagaId)) {
                 is SagaResult.Success -> {
@@ -130,6 +134,7 @@ class SagasViewModel(
 
         val newOrder = currentBooks.size + 1
         _sagaBooks.value = currentBooks + BookWithOrder(book, newOrder)
+        Log.d(TAG, "Added book to saga: ${book.title}, order: $newOrder")
     }
 
     fun removeBookFromSaga(bookId: Long) {
@@ -138,6 +143,7 @@ class SagasViewModel(
             .mapIndexed { index, bookWithOrder ->
                 bookWithOrder.copy(order = index + 1)
             }
+        Log.d(TAG, "Removed book from saga: $bookId")
     }
 
     fun reorderBooks(fromIndex: Int, toIndex: Int) {
@@ -155,6 +161,7 @@ class SagasViewModel(
         _sagaBooks.value = currentBooks.mapIndexed { index, bookWithOrder ->
             bookWithOrder.copy(order = index + 1)
         }
+        Log.d(TAG, "Reordered books: from $fromIndex to $toIndex")
     }
 
     fun createSaga(
@@ -176,6 +183,7 @@ class SagasViewModel(
         viewModelScope.launch {
             _isLoading.value = true
 
+            Log.d(TAG, "Creating saga: $name with ${_sagaBooks.value.size} books")
             // Create saga
             val totalBooks = _sagaBooks.value.size
             when (val result = sagasApiService.createSaga(
@@ -222,6 +230,7 @@ class SagasViewModel(
         viewModelScope.launch {
             _isLoading.value = true
 
+            Log.d(TAG, "Updating saga: $sagaId")
             // Update saga metadata
             when (val result = sagasApiService.updateSaga(
                 sagaId = sagaId,
@@ -260,6 +269,7 @@ class SagasViewModel(
         viewModelScope.launch {
             _isLoading.value = true
 
+            Log.d(TAG, "Deleting saga: $sagaId")
             when (val result = sagasApiService.deleteSaga(sagaId)) {
                 is ActionResult.Success -> {
                     _uiState.value = SagaUiState.Success("Saga deleted successfully")
@@ -278,6 +288,7 @@ class SagasViewModel(
         _uiState.value = SagaUiState.SagasList
         _currentSaga.value = null
         _sagaBooks.value = emptyList()
+        Log.d(TAG, "Cancelled editing")
     }
 
     fun clearError() {

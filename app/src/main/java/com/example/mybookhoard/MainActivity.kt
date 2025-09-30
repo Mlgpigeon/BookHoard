@@ -56,6 +56,7 @@ class MainActivity : ComponentActivity() {
         val booksApiService = BooksApiService(this)
         val userBooksApiService = UserBooksApiService(this)
         val booksCreationApiService = BooksCreationApiService(this)
+        val sagasApiService = SagasApiService(this)
 
         // Initialize repositories
         val userBookRepository = UserBookRepository.getInstance(this)
@@ -99,7 +100,6 @@ class MainActivity : ComponentActivity() {
                 ) as T
             }
         }
-        val sagasApiService = SagasApiService(this)
 
         val sagasFactory = object : ViewModelProvider.Factory {
             override fun <T : ViewModel> create(modelClass: Class<T>): T {
@@ -181,7 +181,9 @@ class MainActivity : ComponentActivity() {
                                 }
                             ) { paddingValues ->
                                 Box(modifier = androidx.compose.ui.Modifier.padding(paddingValues)) {
-                                    LibraryScreen(libraryViewModel = libraryVm)
+                                    LibraryScreen(
+                                        libraryViewModel = libraryVm
+                                    )
                                 }
                             }
                         }
@@ -230,6 +232,7 @@ class MainActivity : ComponentActivity() {
                                 onDismiss = { showBookPicker = false },
                                 onBookSelected = { book ->
                                     sagasVm.addBookToSaga(book)
+                                    showBookPicker = false
                                 },
                                 availableBooks = books,
                                 isLoading = searchUiState is SearchViewModel.SearchUiState.Loading,
@@ -270,6 +273,7 @@ class MainActivity : ComponentActivity() {
                                     onDismiss = { showBookPicker = false },
                                     onBookSelected = { book ->
                                         sagasVm.addBookToSaga(book)
+                                        showBookPicker = false
                                     },
                                     availableBooks = books,
                                     isLoading = searchUiState is SearchViewModel.SearchUiState.Loading,
@@ -284,7 +288,6 @@ class MainActivity : ComponentActivity() {
                         }
                     }
 
-// Update the profile composable to include navigation to sagas:
                     composable("profile") {
                         val user = (authState as? AuthState.Authenticated)?.user
                         if (user != null) {
@@ -324,6 +327,7 @@ class MainActivity : ComponentActivity() {
                                 popUpTo("library") { inclusive = true }
                                 popUpTo("profile") { inclusive = true }
                                 popUpTo("add_book") { inclusive = true }
+                                popUpTo("sagas") { inclusive = true }
                             }
                         }
                         is AuthState.Error -> {
@@ -332,6 +336,7 @@ class MainActivity : ComponentActivity() {
                                 popUpTo("library") { inclusive = true }
                                 popUpTo("profile") { inclusive = true }
                                 popUpTo("add_book") { inclusive = true }
+                                popUpTo("sagas") { inclusive = true }
                             }
                         }
                         is AuthState.Authenticating -> {
@@ -347,6 +352,4 @@ class MainActivity : ComponentActivity() {
         val prefs = getSharedPreferences("bookhoard_auth", MODE_PRIVATE)
         return prefs.getLong("user_id", -1L)
     }
-
-
 }

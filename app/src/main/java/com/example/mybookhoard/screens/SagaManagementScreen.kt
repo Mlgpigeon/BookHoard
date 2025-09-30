@@ -9,7 +9,6 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.mybookhoard.components.common.LoadingIndicator
 import com.example.mybookhoard.components.sagas.*
 import com.example.mybookhoard.viewmodels.SagasViewModel
@@ -22,7 +21,7 @@ import com.example.mybookhoard.viewmodels.SagasViewModel
 fun SagasManagementScreen(
     onNavigateBack: () -> Unit,
     onNavigateToEditor: (Long?) -> Unit,
-    sagasViewModel: SagasViewModel = viewModel()
+    sagasViewModel: SagasViewModel
 ) {
     val sagas by sagasViewModel.sagas.collectAsState()
     val isLoading by sagasViewModel.isLoading.collectAsState()
@@ -31,6 +30,11 @@ fun SagasManagementScreen(
 
     val snackbarHostState = remember { SnackbarHostState() }
     var showDeleteDialog by remember { mutableStateOf<Long?>(null) }
+
+    // Load sagas when screen is first composed
+    LaunchedEffect(Unit) {
+        sagasViewModel.loadSagas()
+    }
 
     Scaffold(
         topBar = {
@@ -73,7 +77,7 @@ fun SagasManagementScreen(
                     )
                 }
 
-                sagas.isEmpty() -> {
+                sagas.isEmpty() && !isLoading -> {
                     EmptySagasState(
                         modifier = Modifier.fillMaxSize()
                     )
