@@ -279,6 +279,8 @@ class SagasApiService(private val context: Context) {
         }
 
         Log.d(TAG, "=== updateBooksOrder($sagaId) called ===")
+        Log.d(TAG, "Book IDs being sent: ${bookOrders.keys.toList()}")
+        Log.d(TAG, "Book orders: $bookOrders")
         Log.d(TAG, "Request body: $body")
 
         val response = apiClient.makeAuthenticatedRequest("sagas/order/$sagaId", "POST", body)
@@ -288,8 +290,52 @@ class SagasApiService(private val context: Context) {
 
         return when {
             response.isSuccessful() -> {
-                Log.d(TAG, "Updated books order for saga $sagaId")
-                ActionResult.Success("Books order updated successfully")
+                try {
+                    val json = JSONObject(response.body)
+
+                    // Log debug info if available
+                    if (json.has("data") && json.getJSONObject("data").has("debug")) {
+                        val debugInfo = json.getJSONObject("data").getJSONObject("debug")
+                        Log.d(TAG, "=== DEBUG INFO FROM SERVER ===")
+                        Log.d(TAG, "Saga ID: ${debugInfo.optLong("saga_id")}")
+                        Log.d(TAG, "Books found in DB: ${debugInfo.optInt("books_found_count")}")
+                        Log.d(TAG, "Books updated: ${debugInfo.optInt("books_updated")}")
+                        Log.d(TAG, "Books not found: ${debugInfo.optJSONArray("books_not_found")}")
+                        Log.d(TAG, "Transaction committed: ${debugInfo.optBoolean("transaction_committed")}")
+
+                        // Log detailed info about each book
+                        if (debugInfo.has("books_processed")) {
+                            val booksProcessed = debugInfo.getJSONArray("books_processed")
+                            Log.d(TAG, "Books processed details:")
+                            for (i in 0 until booksProcessed.length()) {
+                                val bookInfo = booksProcessed.getJSONObject(i)
+                                Log.d(TAG, "  - Book ${bookInfo.optLong("book_id")}: " +
+                                        "order=${bookInfo.optInt("order")}, " +
+                                        "rows_affected=${bookInfo.optInt("rows_affected")}")
+                            }
+                        }
+
+                        // Log books found in DB
+                        if (debugInfo.has("books_found_in_db")) {
+                            val booksFound = debugInfo.getJSONArray("books_found_in_db")
+                            Log.d(TAG, "Books found in database:")
+                            for (i in 0 until booksFound.length()) {
+                                val book = booksFound.getJSONObject(i)
+                                Log.d(TAG, "  - ID: ${book.optLong("id")}, " +
+                                        "Title: ${book.optString("title")}, " +
+                                        "Current saga_id: ${book.optString("saga_id")}, " +
+                                        "Current saga_number: ${book.optString("saga_number")}")
+                            }
+                        }
+                        Log.d(TAG, "=== END DEBUG INFO ===")
+                    }
+
+                    Log.d(TAG, "Updated books order for saga $sagaId")
+                    ActionResult.Success("Books order updated successfully")
+                } catch (e: Exception) {
+                    Log.e(TAG, "Failed to parse response", e)
+                    ActionResult.Success("Books order updated (parse warning)")
+                }
             }
             else -> {
                 val errorMessage = apiClient.parseError(response.body)

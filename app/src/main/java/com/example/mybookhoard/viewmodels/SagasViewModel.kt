@@ -183,7 +183,16 @@ class SagasViewModel(
         viewModelScope.launch {
             _isLoading.value = true
 
-            Log.d(TAG, "Creating saga: $name with ${_sagaBooks.value.size} books")
+            Log.d(TAG, "=== Creating saga: $name ===")
+            Log.d(TAG, "Number of books: ${_sagaBooks.value.size}")
+
+            // Log all books being added
+            _sagaBooks.value.forEachIndexed { index, bookWithOrder ->
+                Log.d(TAG, "Book $index: ID=${bookWithOrder.book.id}, " +
+                        "Title='${bookWithOrder.book.title}', " +
+                        "Order=${bookWithOrder.order}")
+            }
+
             // Create saga
             val totalBooks = _sagaBooks.value.size
             when (val result = sagasApiService.createSaga(
@@ -195,24 +204,31 @@ class SagasViewModel(
             )) {
                 is SagaResult.Success -> {
                     val saga = result.saga
+                    Log.d(TAG, "Saga created successfully with ID: ${saga.id}")
 
                     // Update books with saga ID and order
                     val bookOrders = _sagaBooks.value.associate {
                         it.book.id to it.order
                     }
 
+                    Log.d(TAG, "Updating book orders for saga ${saga.id}")
+                    Log.d(TAG, "Book orders map: $bookOrders")
+
                     when (val orderResult = sagasApiService.updateBooksOrder(saga.id, bookOrders)) {
                         is ActionResult.Success -> {
+                            Log.d(TAG, "Books order updated successfully")
                             _uiState.value = SagaUiState.Success("Saga created successfully")
                             _sagaBooks.value = emptyList()
                             loadSagas()
                         }
                         is ActionResult.Error -> {
+                            Log.e(TAG, "Failed to update books order: ${orderResult.message}")
                             _error.value = orderResult.message
                         }
                     }
                 }
                 is SagaResult.Error -> {
+                    Log.e(TAG, "Failed to create saga: ${result.message}")
                     _error.value = result.message
                 }
             }
