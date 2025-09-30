@@ -5,7 +5,9 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -14,6 +16,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
@@ -25,6 +28,7 @@ import com.example.mybookhoard.viewmodels.SagasViewModel
 /**
  * Draggable and reorderable list of books in saga
  * Uses long press to start dragging
+ * Fixed version with proper drag detection
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -34,19 +38,75 @@ fun DraggableBooksList(
     onReorder: (Int, Int) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    var draggedItem by remember { mutableStateOf<Int?>(null) }
-    var targetItem by remember { mutableStateOf<Int?>(null) }
+    val listState = rememberLazyListState()
+    var draggedIndex by remember { mutableStateOf<Int?>(null) }
+    var targetIndex by remember { mutableStateOf<Int?>(null) }
+    var dragOffset by remember { mutableStateOf(Offset.Zero) }
 
     LazyColumn(
-        modifier = modifier.fillMaxWidth(),
+        state = listState,
+        modifier = modifier
+            .fillMaxWidth()
+            .pointerInput(books.size) {
+                detectDragGesturesAfterLongPress(
+                    onDragStart = { offset ->
+                        // Find which item was touched based on Y position
+                        val itemHeight = 80.dp.toPx() + 8.dp.toPx() // Item height + spacing
+                        val scrollOffset = listState.firstVisibleItemScrollOffset.toFloat()
+                        val adjustedY = offset.y + scrollOffset
+                        val index = (adjustedY / itemHeight).toInt()
+
+                        if (index in books.indices) {
+                            draggedIndex = index
+                            targetIndex = index
+                            dragOffset = offset
+                        }
+                    },
+                    onDrag = { change, dragAmount ->
+                        dragOffset += dragAmount
+
+                        // Calculate target index based on drag position
+                        draggedIndex?.let { dragged ->
+                            val itemHeight = 80.dp.toPx() + 8.dp.toPx()
+                            val scrollOffset = listState.firstVisibleItemScrollOffset.toFloat()
+                            val adjustedY = dragOffset.y + scrollOffset
+                            val newTarget = (adjustedY / itemHeight).toInt()
+                                .coerceIn(0, books.lastIndex)
+
+                            if (newTarget != targetIndex) {
+                                targetIndex = newTarget
+                            }
+                        }
+
+                        change.consume()
+                    },
+                    onDragEnd = {
+                        draggedIndex?.let { from ->
+                            targetIndex?.let { to ->
+                                if (from != to) {
+                                    onReorder(from, to)
+                                }
+                            }
+                        }
+                        draggedIndex = null
+                        targetIndex = null
+                        dragOffset = Offset.Zero
+                    },
+                    onDragCancel = {
+                        draggedIndex = null
+                        targetIndex = null
+                        dragOffset = Offset.Zero
+                    }
+                )
+            },
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         itemsIndexed(
             items = books,
             key = { _, book -> book.book.id }
         ) { index, bookWithOrder ->
-            val isDragging = draggedItem == index
-            val isTarget = targetItem == index
+            val isDragging = draggedIndex == index
+            val isTarget = targetIndex == index && draggedIndex != index
 
             DraggableBookItem(
                 book = bookWithOrder.book,
@@ -54,19 +114,6 @@ fun DraggableBooksList(
                 isDragging = isDragging,
                 isTarget = isTarget,
                 onRemove = { onRemoveBook(bookWithOrder.book.id) },
-                onDragStart = { draggedItem = index },
-                onDragEnd = {
-                    draggedItem?.let { from ->
-                        targetItem?.let { to ->
-                            if (from != to) {
-                                onReorder(from, to)
-                            }
-                        }
-                    }
-                    draggedItem = null
-                    targetItem = null
-                },
-                onDragOver = { targetItem = index },
                 modifier = Modifier
                     .fillMaxWidth()
                     .animateItem()
@@ -77,6 +124,7 @@ fun DraggableBooksList(
 
 /**
  * Individual book item that can be dragged
+ * Now simplified without individual pointer input
  */
 @Composable
 private fun DraggableBookItem(
@@ -85,9 +133,6 @@ private fun DraggableBookItem(
     isDragging: Boolean,
     isTarget: Boolean,
     onRemove: () -> Unit,
-    onDragStart: () -> Unit,
-    onDragEnd: () -> Unit,
-    onDragOver: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val elevation by animateDpAsState(
@@ -104,22 +149,19 @@ private fun DraggableBookItem(
                 scaleY = scale
             }
             .shadow(elevation, RoundedCornerShape(12.dp))
-            .zIndex(if (isDragging) 1f else 0f)
-            .pointerInput(Unit) {
-                detectDragGesturesAfterLongPress(
-                    onDragStart = { onDragStart() },
-                    onDragEnd = { onDragEnd() },
-                    onDragCancel = { onDragEnd() },
-                    onDrag = { _, _ -> onDragOver() }
-                )
-            },
-        colors = if (isTarget) CardDefaults.elevatedCardColors(
-            containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
-        ) else CardDefaults.elevatedCardColors()
+            .zIndex(if (isDragging) 1f else 0f),
+        colors = if (isTarget) {
+            CardDefaults.elevatedCardColors(
+                containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
+            )
+        } else {
+            CardDefaults.elevatedCardColors()
+        }
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
+                .height(80.dp)
                 .padding(12.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(12.dp)
