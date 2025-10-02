@@ -19,7 +19,7 @@ import com.example.mybookhoard.data.entities.*
 @Composable
 fun ExpandableBookSection(
     title: String,
-    books: List<BookWithUserData>,
+    books: List<BookWithUserDataExtended>,
     onReadingStatusChange: (Long, UserBookReadingStatus) -> Unit,
     onWishlistStatusChange: (Long, UserBookWishlistStatus) -> Unit,
     onRemoveFromCollection: (Long) -> Unit,

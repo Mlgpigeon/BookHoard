@@ -17,7 +17,7 @@ import com.example.mybookhoard.components.dialogs.WishlistSelectionDialog
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun LibraryBookCard(
-    bookWithUserData: BookWithUserData,
+    bookWithUserData: BookWithUserDataExtended,
     onReadingStatusChange: (UserBookReadingStatus) -> Unit,
     onWishlistStatusChange: (UserBookWishlistStatus) -> Unit,
     onRemoveFromCollection: () -> Unit,
