@@ -3,6 +3,7 @@ package com.example.mybookhoard.viewmodels
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.mybookhoard.api.books.BooksActionResult
 import com.example.mybookhoard.api.books.UserBooksApiService
 import com.example.mybookhoard.api.books.LibraryResult
 import com.example.mybookhoard.api.books.UserBookResult
@@ -206,11 +207,18 @@ class LibraryViewModel(
     fun removeBookFromCollection(bookId: Long) {
         viewModelScope.launch {
             try {
-                userBookRepository.deleteUserBook(userId, bookId)
-                Log.d(TAG, "Removed book $bookId from collection")
-                loadLibraryData()
+                when (val result = userBooksApiService.removeBookFromCollection(bookId)) {
+                    is BooksActionResult.Success -> {
+                        Log.d(TAG, "Book removed from collection successfully: $bookId")
+                        loadLibraryData()
+                    }
+                    is BooksActionResult.Error -> {
+                        Log.e(TAG, "Failed to remove book: ${result.message}")
+                        _error.value = "Failed to remove book: ${result.message}"
+                    }
+                }
             } catch (e: Exception) {
-                Log.e(TAG, "Error removing book from collection", e)
+                Log.e(TAG, "Exception removing book from collection", e)
                 _error.value = "Failed to remove book: ${e.message}"
             }
         }
