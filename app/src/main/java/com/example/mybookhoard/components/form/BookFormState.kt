@@ -7,6 +7,7 @@ package com.example.mybookhoard.components.form
 data class BookFormState(
     val title: String = "",
     val author: String = "",
+    val saga: String = "",
     val description: String = "",
     val publicationYear: String = "",
     val language: String = "en",
@@ -15,6 +16,7 @@ data class BookFormState(
     // Validation errors
     val titleError: String? = null,
     val authorError: String? = null,
+    val sagaError: String? = null,
     val publicationYearError: String? = null,
     val isbnError: String? = null
 )
@@ -26,6 +28,7 @@ fun BookFormState.isValid(): Boolean {
     return title.isNotBlank() &&
             titleError == null &&
             authorError == null &&
+            sagaError == null &&
             publicationYearError == null &&
             isbnError == null
 }
@@ -42,6 +45,10 @@ fun BookFormState.validate(): BookFormState {
         },
         authorError = when {
             author.isNotBlank() && author.length < 2 -> "Author name must be at least 2 characters"
+            else -> null
+        },
+        sagaError = when {
+            saga.isNotBlank() && saga.length < 2 -> "Saga name must be at least 2 characters"
             else -> null
         },
         publicationYearError = when {

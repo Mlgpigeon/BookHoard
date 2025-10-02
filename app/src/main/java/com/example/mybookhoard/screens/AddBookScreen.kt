@@ -27,6 +27,10 @@ fun AddBookScreen(
     val formState by addBookViewModel.formState.collectAsState()
     val authorSuggestions by addBookViewModel.authorSuggestions.collectAsState()
 
+    val sagaSuggestions by addBookViewModel.sagaSuggestions.collectAsState()
+    val sagaNumber by addBookViewModel.sagaNumber.collectAsState()
+
+
     val scrollState = rememberScrollState()
     val snackbarHostState = remember { SnackbarHostState() }
 
@@ -100,6 +104,16 @@ fun AddBookScreen(
                 onSuggestionClick = { addBookViewModel.selectAuthorSuggestion(it) },
                 isError = formState.authorError != null,
                 errorMessage = formState.authorError,
+                modifier = Modifier.fillMaxWidth()
+            )
+
+            SagaFieldWithSuggestions(
+                sagaName = formState.saga,
+                onSagaNameChange = { addBookViewModel.updateSaga(it) },
+                sagaNumber = sagaNumber,
+                onSagaNumberChange = { addBookViewModel.updateSagaNumber(it) },
+                suggestions = sagaSuggestions,
+                onSuggestionClick = { addBookViewModel.selectSagaSuggestion(it) },
                 modifier = Modifier.fillMaxWidth()
             )
 

@@ -1,3 +1,7 @@
+// Update AddBookViewModel.kt
+// Location: app/src/main/java/com/example/mybookhoard/viewmodels/AddBookViewModel.kt
+// Add these properties and methods to the existing class
+
 package com.example.mybookhoard.viewmodels
 
 import android.util.Log
@@ -9,6 +13,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import com.example.mybookhoard.api.books.BooksCreationApiService
 import com.example.mybookhoard.api.books.BookCreationResult
+import com.example.mybookhoard.api.books.SagaSuggestion
 import com.example.mybookhoard.components.form.BookFormState
 import com.example.mybookhoard.components.form.isValid
 import com.example.mybookhoard.components.form.validate
@@ -29,12 +34,24 @@ class AddBookViewModel(
     private val _authorSuggestions = MutableStateFlow<List<String>>(emptyList())
     val authorSuggestions: StateFlow<List<String>> = _authorSuggestions.asStateFlow()
 
+    // Saga suggestions (NEW)
+    private val _sagaSuggestions = MutableStateFlow<List<SagaSuggestion>>(emptyList())
+    val sagaSuggestions: StateFlow<List<SagaSuggestion>> = _sagaSuggestions.asStateFlow()
+
+    // Selected saga ID and number (NEW)
+    private val _selectedSagaId = MutableStateFlow<Long?>(null)
+    val selectedSagaId: StateFlow<Long?> = _selectedSagaId.asStateFlow()
+
+    private val _sagaNumber = MutableStateFlow("")
+    val sagaNumber: StateFlow<String> = _sagaNumber.asStateFlow()
+
     // UI state
     private val _uiState = MutableStateFlow<AddBookUiState>(AddBookUiState.Initial)
     val uiState: StateFlow<AddBookUiState> = _uiState.asStateFlow()
 
-    // Debounce job for author suggestions
+    // Debounce jobs
     private var authorSuggestionsJob: Job? = null
+    private var sagaSuggestionsJob: Job? = null
 
     sealed class AddBookUiState {
         object Initial : AddBookUiState()
@@ -43,6 +60,7 @@ class AddBookViewModel(
         data class Error(val message: String) : AddBookUiState()
     }
 
+    // Existing methods...
     fun updateTitle(title: String) {
         _formState.value = _formState.value.copy(title = title).validate()
     }
@@ -50,11 +68,10 @@ class AddBookViewModel(
     fun updateAuthor(author: String) {
         _formState.value = _formState.value.copy(author = author).validate()
 
-        // Get author suggestions with debounce
         authorSuggestionsJob?.cancel()
         if (author.length >= 2) {
             authorSuggestionsJob = viewModelScope.launch {
-                delay(300) // Debounce
+                delay(300)
                 if (author == _formState.value.author) {
                     loadAuthorSuggestions(author)
                 }
@@ -69,12 +86,54 @@ class AddBookViewModel(
         _authorSuggestions.value = emptyList()
     }
 
+    // NEW: Saga methods
+    fun updateSaga(sagaName: String) {
+        _formState.value = _formState.value.copy(saga = sagaName).validate()
+
+        // Clear selected saga if user is typing a new name
+        if (_selectedSagaId.value != null) {
+            _selectedSagaId.value = null
+        }
+
+        sagaSuggestionsJob?.cancel()
+        if (sagaName.length >= 2) {
+            sagaSuggestionsJob = viewModelScope.launch {
+                delay(300)
+                if (sagaName == _formState.value.saga) {
+                    loadSagaSuggestions(sagaName)
+                }
+            }
+        } else {
+            _sagaSuggestions.value = emptyList()
+        }
+    }
+
+    fun selectSagaSuggestion(suggestion: SagaSuggestion) {
+        _formState.value = _formState.value.copy(saga = suggestion.name).validate()
+        _selectedSagaId.value = suggestion.id
+        _sagaSuggestions.value = emptyList()
+
+        // Auto-suggest next number in saga
+        val nextNumber = suggestion.totalBooks + 1
+        _sagaNumber.value = nextNumber.toString()
+
+        Log.d(TAG, "Selected saga: ${suggestion.name} (ID: ${suggestion.id}), suggested number: $nextNumber")
+    }
+
+    fun updateSagaNumber(number: String) {
+        // Only allow digits
+        val filtered = number.filter { it.isDigit() }
+        if (filtered.length <= 4) { // Max 4 digits for saga number
+            _sagaNumber.value = filtered
+        }
+    }
+
+    // Existing methods...
     fun updateDescription(description: String) {
         _formState.value = _formState.value.copy(description = description).validate()
     }
 
     fun updatePublicationYear(year: String) {
-        // Only allow digits
         val filteredYear = year.filter { it.isDigit() }
         if (filteredYear.length <= 4) {
             _formState.value = _formState.value.copy(publicationYear = filteredYear).validate()
@@ -86,7 +145,6 @@ class AddBookViewModel(
     }
 
     fun updateIsbn(isbn: String) {
-        // Allow digits, spaces, and hyphens, and 'X' for ISBN-10
         val filteredIsbn = isbn.filter { it.isDigit() || it == '-' || it == ' ' || it.uppercaseChar() == 'X' }
         _formState.value = _formState.value.copy(isbn = filteredIsbn).validate()
     }
@@ -99,6 +157,17 @@ class AddBookViewModel(
         } catch (e: Exception) {
             Log.e(TAG, "Failed to load author suggestions", e)
             _authorSuggestions.value = emptyList()
+        }
+    }
+
+    private suspend fun loadSagaSuggestions(query: String) {
+        try {
+            val suggestions = booksCreationApiService.searchSagas(query)
+            _sagaSuggestions.value = suggestions
+            Log.d(TAG, "Loaded ${suggestions.size} saga suggestions for '$query'")
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to load saga suggestions", e)
+            _sagaSuggestions.value = emptyList()
         }
     }
 
@@ -115,43 +184,52 @@ class AddBookViewModel(
 
         viewModelScope.launch {
             try {
+                // Parse saga number
+                val parsedSagaNumber = _sagaNumber.value.toIntOrNull()
+
+                // Determine saga handling
+                val sagaId = _selectedSagaId.value
+                val sagaName = currentForm.saga.takeIf { it.isNotBlank() }
+
+                Log.d(TAG, "Creating book with saga: name=$sagaName, id=$sagaId, number=$parsedSagaNumber")
+
                 val result = booksCreationApiService.createBook(
                     title = currentForm.title,
                     authorName = currentForm.author.takeIf { it.isNotBlank() },
                     description = currentForm.description.takeIf { it.isNotBlank() },
-                    publicationYear = currentForm.publicationYear.takeIf { it.isNotBlank() }?.toIntOrNull(),
+                    publicationYear = currentForm.publicationYear.toIntOrNull(),
                     language = currentForm.language,
-                    isbn = currentForm.isbn.takeIf { it.isNotBlank() }
+                    isbn = currentForm.isbn.takeIf { it.isNotBlank() },
+                    sagaId = sagaId,
+                    sagaName = sagaName,
+                    sagaNumber = parsedSagaNumber
                 )
 
                 when (result) {
                     is BookCreationResult.Success -> {
-                        Log.d(TAG, "Book created successfully: ${result.book.title}")
                         _uiState.value = AddBookUiState.Success(result.book.title)
-
-                        // Reset form after successful creation
+                        Log.d(TAG, "Book created successfully: ${result.book.title}")
                         resetForm()
                     }
                     is BookCreationResult.Error -> {
-                        Log.e(TAG, "Failed to create book: ${result.message}")
                         _uiState.value = AddBookUiState.Error(result.message)
+                        Log.e(TAG, "Failed to create book: ${result.message}")
                     }
                 }
             } catch (e: Exception) {
+                _uiState.value = AddBookUiState.Error(e.message ?: "Unknown error")
                 Log.e(TAG, "Exception creating book", e)
-                _uiState.value = AddBookUiState.Error("Unexpected error: ${e.message}")
             }
         }
     }
 
-    private fun resetForm() {
+    fun resetForm() {
         _formState.value = BookFormState()
         _authorSuggestions.value = emptyList()
-        // Reset UI state to initial after a delay
-        viewModelScope.launch {
-            delay(1000) // Give time for success message to show
-            _uiState.value = AddBookUiState.Initial
-        }
+        _sagaSuggestions.value = emptyList()
+        _selectedSagaId.value = null
+        _sagaNumber.value = ""
+        _uiState.value = AddBookUiState.Initial
     }
 
     fun resetUiState() {
