@@ -30,6 +30,14 @@ class LibraryViewModel(
     private val _searchQuery = MutableStateFlow("")
     val searchQuery: StateFlow<String> = _searchQuery.asStateFlow()
 
+    private val _wishlistSearchQuery = MutableStateFlow("")
+    val wishlistSearchQuery: StateFlow<String> = _wishlistSearchQuery.asStateFlow()
+
+    // Debounced wishlist search query (300ms delay)
+    private val debouncedWishlistSearchQuery = _wishlistSearchQuery
+        .debounce(300)
+        .distinctUntilChanged()
+
     // Debounced search query (300ms delay)
     private val debouncedSearchQuery = _searchQuery
         .debounce(300)
@@ -70,12 +78,26 @@ class LibraryViewModel(
         else FuzzySearchUtils.searchBooksExtended(books, query)
     }.stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
 
-    // Books by wishlist status (for My Wishlist tab)
-    private val _wishlistBooks = MutableStateFlow<List<BookWithUserDataExtended>>(emptyList())
-    val wishlistBooks: StateFlow<List<BookWithUserDataExtended>> = _wishlistBooks.asStateFlow()
+    // Base wishlist data without filtering
+    private val _baseWishlistBooks = MutableStateFlow<List<BookWithUserDataExtended>>(emptyList())
+    private val _baseOnTheWayBooks = MutableStateFlow<List<BookWithUserDataExtended>>(emptyList())
 
-    private val _onTheWayBooks = MutableStateFlow<List<BookWithUserDataExtended>>(emptyList())
-    val onTheWayBooks: StateFlow<List<BookWithUserDataExtended>> = _onTheWayBooks.asStateFlow()
+    // Filtered books by wishlist status (for My Wishlist tab)
+    val wishlistBooks: StateFlow<List<BookWithUserDataExtended>> = combine(
+        _baseWishlistBooks,
+        debouncedWishlistSearchQuery
+    ) { books, query ->
+        if (query.isBlank()) books
+        else FuzzySearchUtils.searchBooksExtended(books, query)
+    }.stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
+
+    val onTheWayBooks: StateFlow<List<BookWithUserDataExtended>> = combine(
+        _baseOnTheWayBooks,
+        debouncedWishlistSearchQuery
+    ) { books, query ->
+        if (query.isBlank()) books
+        else FuzzySearchUtils.searchBooksExtended(books, query)
+    }.stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
 
     // Loading states
     private val _isLoading = MutableStateFlow(false)
@@ -130,13 +152,13 @@ class LibraryViewModel(
                             }
                         )
 
-                        _wishlistBooks.value = BookSorting.sortBySaga(
+                        _baseWishlistBooks.value = BookSorting.sortBySaga(
                             allBooksWithUserData.filter {
                                 it.userBook?.wishlistStatus == UserBookWishlistStatus.WISH
                             }
                         )
 
-                        _onTheWayBooks.value = BookSorting.sortBySaga(
+                        _baseOnTheWayBooks.value = BookSorting.sortBySaga(
                             allBooksWithUserData.filter {
                                 it.userBook?.wishlistStatus == UserBookWishlistStatus.ON_THE_WAY
                             }
@@ -177,6 +199,13 @@ class LibraryViewModel(
         _searchQuery.value = ""
     }
 
+    fun updateWishlistSearchQuery(query: String) {
+        _wishlistSearchQuery.value = query
+    }
+
+    fun clearWishlistSearch() {
+        _wishlistSearchQuery.value = ""
+    }
 
     fun updateReadingStatus(bookId: Long, newStatus: UserBookReadingStatus) {
         viewModelScope.launch {
