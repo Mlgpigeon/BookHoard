@@ -1,7 +1,3 @@
-// Update AddBookViewModel.kt
-// Location: app/src/main/java/com/example/mybookhoard/viewmodels/AddBookViewModel.kt
-// Add these properties and methods to the existing class
-
 package com.example.mybookhoard.viewmodels
 
 import android.util.Log
@@ -12,14 +8,18 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import com.example.mybookhoard.api.books.BooksCreationApiService
+import com.example.mybookhoard.api.books.UserBooksApiService
 import com.example.mybookhoard.api.books.BookCreationResult
+import com.example.mybookhoard.api.books.BooksActionResult
 import com.example.mybookhoard.api.books.SagaSuggestion
 import com.example.mybookhoard.components.form.BookFormState
 import com.example.mybookhoard.components.form.isValid
 import com.example.mybookhoard.components.form.validate
+import com.example.mybookhoard.data.entities.UserBookWishlistStatus
 
 class AddBookViewModel(
-    private val booksCreationApiService: BooksCreationApiService
+    private val booksCreationApiService: BooksCreationApiService,
+    private val userBooksApiService: UserBooksApiService
 ) : ViewModel() {
 
     companion object {
@@ -34,16 +34,20 @@ class AddBookViewModel(
     private val _authorSuggestions = MutableStateFlow<List<String>>(emptyList())
     val authorSuggestions: StateFlow<List<String>> = _authorSuggestions.asStateFlow()
 
-    // Saga suggestions (NEW)
+    // Saga suggestions
     private val _sagaSuggestions = MutableStateFlow<List<SagaSuggestion>>(emptyList())
     val sagaSuggestions: StateFlow<List<SagaSuggestion>> = _sagaSuggestions.asStateFlow()
 
-    // Selected saga ID and number (NEW)
+    // Selected saga ID and number
     private val _selectedSagaId = MutableStateFlow<Long?>(null)
     val selectedSagaId: StateFlow<Long?> = _selectedSagaId.asStateFlow()
 
     private val _sagaNumber = MutableStateFlow("")
     val sagaNumber: StateFlow<String> = _sagaNumber.asStateFlow()
+
+    // Wishlist status selection (NEW)
+    private val _selectedWishlistStatus = MutableStateFlow<UserBookWishlistStatus?>(null)
+    val selectedWishlistStatus: StateFlow<UserBookWishlistStatus?> = _selectedWishlistStatus.asStateFlow()
 
     // UI state
     private val _uiState = MutableStateFlow<AddBookUiState>(AddBookUiState.Initial)
@@ -60,7 +64,6 @@ class AddBookViewModel(
         data class Error(val message: String) : AddBookUiState()
     }
 
-    // Existing methods...
     fun updateTitle(title: String) {
         _formState.value = _formState.value.copy(title = title).validate()
     }
@@ -86,7 +89,6 @@ class AddBookViewModel(
         _authorSuggestions.value = emptyList()
     }
 
-    // NEW: Saga methods
     fun updateSaga(sagaName: String) {
         _formState.value = _formState.value.copy(saga = sagaName).validate()
 
@@ -111,42 +113,38 @@ class AddBookViewModel(
     fun selectSagaSuggestion(suggestion: SagaSuggestion) {
         _formState.value = _formState.value.copy(saga = suggestion.name).validate()
         _selectedSagaId.value = suggestion.id
+        _sagaNumber.value = (suggestion.totalBooks + 1).toString()
         _sagaSuggestions.value = emptyList()
-
-        // Auto-suggest next number in saga
-        val nextNumber = suggestion.totalBooks + 1
-        _sagaNumber.value = nextNumber.toString()
-
-        Log.d(TAG, "Selected saga: ${suggestion.name} (ID: ${suggestion.id}), suggested number: $nextNumber")
+        Log.d(TAG, "Selected saga: ${suggestion.name} (ID: ${suggestion.id}), auto-filled number: ${suggestion.totalBooks + 1}")
     }
 
     fun updateSagaNumber(number: String) {
-        // Only allow digits
         val filtered = number.filter { it.isDigit() }
-        if (filtered.length <= 4) { // Max 4 digits for saga number
-            _sagaNumber.value = filtered
-        }
+        _sagaNumber.value = filtered
     }
 
-    // Existing methods...
     fun updateDescription(description: String) {
         _formState.value = _formState.value.copy(description = description).validate()
     }
 
     fun updatePublicationYear(year: String) {
-        val filteredYear = year.filter { it.isDigit() }
-        if (filteredYear.length <= 4) {
-            _formState.value = _formState.value.copy(publicationYear = filteredYear).validate()
-        }
+        val filtered = year.filter { it.isDigit() }.take(4)
+        _formState.value = _formState.value.copy(publicationYear = filtered).validate()
     }
 
     fun updateLanguage(language: String) {
-        _formState.value = _formState.value.copy(language = language)
+        _formState.value = _formState.value.copy(language = language).validate()
     }
 
     fun updateIsbn(isbn: String) {
         val filteredIsbn = isbn.filter { it.isDigit() || it == '-' || it == ' ' || it.uppercaseChar() == 'X' }
         _formState.value = _formState.value.copy(isbn = filteredIsbn).validate()
+    }
+
+    // NEW: Update wishlist status
+    fun updateWishlistStatus(status: UserBookWishlistStatus?) {
+        _selectedWishlistStatus.value = status
+        Log.d(TAG, "Wishlist status updated to: ${status?.name ?: "none"}")
     }
 
     private suspend fun loadAuthorSuggestions(query: String) {
@@ -193,6 +191,7 @@ class AddBookViewModel(
 
                 Log.d(TAG, "Creating book with saga: name=$sagaName, id=$sagaId, number=$parsedSagaNumber")
 
+                // Step 1: Create the book
                 val result = booksCreationApiService.createBook(
                     title = currentForm.title,
                     authorName = currentForm.author.takeIf { it.isNotBlank() },
@@ -207,8 +206,41 @@ class AddBookViewModel(
 
                 when (result) {
                     is BookCreationResult.Success -> {
-                        _uiState.value = AddBookUiState.Success(result.book.title)
-                        Log.d(TAG, "Book created successfully: ${result.book.title}")
+                        val createdBook = result.book
+                        Log.d(TAG, "Book created successfully: ${createdBook.title} (ID: ${createdBook.id})")
+
+                        // Step 2: If wishlist status is selected, create UserBook
+                        val wishlistStatus = _selectedWishlistStatus.value
+                        if (wishlistStatus != null) {
+                            Log.d(TAG, "Creating UserBook with wishlist status: ${wishlistStatus.name}")
+
+                            val bookId = createdBook.id
+
+                            if (bookId == null) {
+                                Log.e(TAG, "Book created but ID is null")
+                                _uiState.value = AddBookUiState.Error("Book created but failed to get ID")
+                                return@launch
+                            }
+
+                            when (val userBookResult = userBooksApiService.addBookToCollection(
+                                bookId = createdBook.id,
+                                wishlistStatus = wishlistStatus.name
+                            )) {
+                                is BooksActionResult.Success -> {
+                                    Log.d(TAG, "UserBook created successfully")
+                                    _uiState.value = AddBookUiState.Success(createdBook.title)
+                                }
+                                is BooksActionResult.Error -> {
+                                    Log.w(TAG, "Book created but failed to add to collection: ${userBookResult.message}")
+                                    // Still consider it a success since the book was created
+                                    _uiState.value = AddBookUiState.Success(createdBook.title)
+                                }
+                            }
+                        } else {
+                            Log.d(TAG, "No wishlist status selected, skipping UserBook creation")
+                            _uiState.value = AddBookUiState.Success(createdBook.title)
+                        }
+
                         resetForm()
                     }
                     is BookCreationResult.Error -> {
@@ -229,6 +261,7 @@ class AddBookViewModel(
         _sagaSuggestions.value = emptyList()
         _selectedSagaId.value = null
         _sagaNumber.value = ""
+        _selectedWishlistStatus.value = null
         _uiState.value = AddBookUiState.Initial
     }
 

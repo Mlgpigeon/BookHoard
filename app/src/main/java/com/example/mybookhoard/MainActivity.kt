@@ -96,7 +96,8 @@ class MainActivity : ComponentActivity() {
             override fun <T : ViewModel> create(modelClass: Class<T>): T {
                 @Suppress("UNCHECKED_CAST")
                 return AddBookViewModel(
-                    booksCreationApiService = booksCreationApiService
+                    booksCreationApiService = booksCreationApiService,
+                    userBooksApiService = userBooksApiService  // NUEVA DEPENDENCIA
                 ) as T
             }
         }

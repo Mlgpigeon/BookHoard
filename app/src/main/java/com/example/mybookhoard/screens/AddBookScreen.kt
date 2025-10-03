@@ -26,10 +26,9 @@ fun AddBookScreen(
     val uiState by addBookViewModel.uiState.collectAsState()
     val formState by addBookViewModel.formState.collectAsState()
     val authorSuggestions by addBookViewModel.authorSuggestions.collectAsState()
-
     val sagaSuggestions by addBookViewModel.sagaSuggestions.collectAsState()
     val sagaNumber by addBookViewModel.sagaNumber.collectAsState()
-
+    val selectedWishlistStatus by addBookViewModel.selectedWishlistStatus.collectAsState()
 
     val scrollState = rememberScrollState()
     val snackbarHostState = remember { SnackbarHostState() }
@@ -158,6 +157,15 @@ fun AddBookScreen(
                 modifier = Modifier.fillMaxWidth(),
                 isError = formState.isbnError != null,
                 supportingText = formState.isbnError ?: "10 or 13 digit ISBN (optional)"
+            )
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // NEW: Wishlist Status Selector
+            WishlistStatusSelector(
+                selectedStatus = selectedWishlistStatus,
+                onStatusChange = { addBookViewModel.updateWishlistStatus(it) },
+                modifier = Modifier.fillMaxWidth()
             )
 
             Spacer(modifier = Modifier.height(16.dp))
