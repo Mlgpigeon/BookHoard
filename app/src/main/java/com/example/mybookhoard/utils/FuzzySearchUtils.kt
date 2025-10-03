@@ -2,6 +2,7 @@ package com.example.mybookhoard.utils
 
 import com.example.mybookhoard.data.entities.Book
 import com.example.mybookhoard.data.entities.BookWithUserData
+import com.example.mybookhoard.data.entities.BookWithUserDataExtended
 import kotlin.math.max
 import kotlin.math.min
 
@@ -164,6 +165,20 @@ object FuzzySearchUtils {
             .mapNotNull { book ->
                 val score = calculateBookScore(book, normalizedQuery)
                 if (score > 0) book to score else null
+            }
+            .sortedByDescending { it.second } // Sort by score descending
+            .map { it.first }
+    }
+
+    fun searchBooksExtended(books: List<BookWithUserDataExtended>, query: String): List<BookWithUserDataExtended> {
+        if (query.isBlank()) return books
+
+        val normalizedQuery = query.lowercase().trim()
+
+        return books
+            .mapNotNull { bookWithUserData ->
+                val score = calculateBookScore(bookWithUserData.book, normalizedQuery)
+                if (score > 0) bookWithUserData to score else null
             }
             .sortedByDescending { it.second } // Sort by score descending
             .map { it.first }

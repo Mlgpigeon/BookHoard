@@ -13,7 +13,9 @@ import com.example.mybookhoard.repositories.UserBookRepository
 import com.example.mybookhoard.repositories.BookRepository
 import com.example.mybookhoard.data.entities.*
 import com.example.mybookhoard.utils.BookSorting
-
+import kotlinx.coroutines.FlowPreview
+import com.example.mybookhoard.utils.FuzzySearchUtils
+@OptIn(FlowPreview::class)
 class LibraryViewModel(
     private val userBookRepository: UserBookRepository,
     private val bookRepository: BookRepository,
@@ -25,19 +27,48 @@ class LibraryViewModel(
         private const val TAG = "LibraryViewModel"
     }
 
+    private val _searchQuery = MutableStateFlow("")
+    val searchQuery: StateFlow<String> = _searchQuery.asStateFlow()
+
+    // Debounced search query (300ms delay)
+    private val debouncedSearchQuery = _searchQuery
+        .debounce(300)
+        .distinctUntilChanged()
+
     // Library statistics
     private val _libraryStats = MutableStateFlow(LibraryStats())
     val libraryStats: StateFlow<LibraryStats> = _libraryStats.asStateFlow()
 
-    // Books by reading status (for My Library tab)
-    private val _readBooks = MutableStateFlow<List<BookWithUserDataExtended>>(emptyList())
-    val readBooks: StateFlow<List<BookWithUserDataExtended>> = _readBooks.asStateFlow()
+    // Base data without filtering
+    private val _baseReadBooks = MutableStateFlow<List<BookWithUserDataExtended>>(emptyList())
+    private val _baseReadingBooks = MutableStateFlow<List<BookWithUserDataExtended>>(emptyList())
+    private val _baseNotStartedBooks = MutableStateFlow<List<BookWithUserDataExtended>>(emptyList())
 
-    private val _readingBooks = MutableStateFlow<List<BookWithUserDataExtended>>(emptyList())
-    val readingBooks: StateFlow<List<BookWithUserDataExtended>> = _readingBooks.asStateFlow()
+    // Filtered books by reading status (for My Library tab)
+    // Filtered books by reading status (for My Library tab)
+    val readBooks: StateFlow<List<BookWithUserDataExtended>> = combine(
+        _baseReadBooks,
+        debouncedSearchQuery
+    ) { books, query ->
+        if (query.isBlank()) books
+        else FuzzySearchUtils.searchBooksExtended(books, query)
+    }.stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
 
-    private val _notStartedBooks = MutableStateFlow<List<BookWithUserDataExtended>>(emptyList())
-    val notStartedBooks: StateFlow<List<BookWithUserDataExtended>> = _notStartedBooks.asStateFlow()
+    val readingBooks: StateFlow<List<BookWithUserDataExtended>> = combine(
+        _baseReadingBooks,
+        debouncedSearchQuery
+    ) { books, query ->
+        if (query.isBlank()) books
+        else FuzzySearchUtils.searchBooksExtended(books, query)
+    }.stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
+
+    val notStartedBooks: StateFlow<List<BookWithUserDataExtended>> = combine(
+        _baseNotStartedBooks,
+        debouncedSearchQuery
+    ) { books, query ->
+        if (query.isBlank()) books
+        else FuzzySearchUtils.searchBooksExtended(books, query)
+    }.stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
 
     // Books by wishlist status (for My Wishlist tab)
     private val _wishlistBooks = MutableStateFlow<List<BookWithUserDataExtended>>(emptyList())
@@ -74,35 +105,31 @@ class LibraryViewModel(
                     is LibraryResult.Success -> {
                         Log.d(TAG, "Loaded ${result.items.size} library items in single API call")
 
-                        // Convert LibraryItems to BookWithUserDataExtended (includes sagaName)
                         val allBooksWithUserData = result.items.map { it.toBookWithUserDataExtended() }
 
-                        // Filter by states - Only OBTAINED books go to "My Library"
                         val obtainedBooks = allBooksWithUserData.filter {
                             it.userBook?.wishlistStatus == UserBookWishlistStatus.OBTAINED
                         }
 
-                        // Filter and sort by reading status with saga ordering
-                        _readBooks.value = BookSorting.sortBySaga(
+                        _baseReadBooks.value = BookSorting.sortBySaga(
                             obtainedBooks.filter {
                                 it.userBook?.readingStatus == UserBookReadingStatus.READ
                             }
                         )
 
-                        _readingBooks.value = BookSorting.sortBySaga(
+                        _baseReadingBooks.value = BookSorting.sortBySaga(
                             obtainedBooks.filter {
                                 it.userBook?.readingStatus == UserBookReadingStatus.READING
                             }
                         )
 
-                        _notStartedBooks.value = BookSorting.sortBySaga(
+                        _baseNotStartedBooks.value = BookSorting.sortBySaga(
                             obtainedBooks.filter {
                                 it.userBook?.readingStatus == UserBookReadingStatus.NOT_STARTED ||
                                         it.userBook?.readingStatus == null
                             }
                         )
 
-                        // Data for Wishlist tab - also sorted by saga
                         _wishlistBooks.value = BookSorting.sortBySaga(
                             allBooksWithUserData.filter {
                                 it.userBook?.wishlistStatus == UserBookWishlistStatus.WISH
@@ -115,18 +142,16 @@ class LibraryViewModel(
                             }
                         )
 
-                        // Updated statistics
                         _libraryStats.value = LibraryStats(
                             totalBooks = obtainedBooks.size,
-                            readBooks = _readBooks.value.size,
-                            readingBooks = _readingBooks.value.size,
-                            notStartedBooks = _notStartedBooks.value.size
+                            readBooks = _baseReadBooks.value.size,
+                            readingBooks = _baseReadingBooks.value.size,
+                            notStartedBooks = _baseNotStartedBooks.value.size
                         )
 
-                        Log.d(TAG, "Library data loaded efficiently - Total: ${obtainedBooks.size}, " +
-                                "Read: ${_readBooks.value.size}, Reading: ${_readingBooks.value.size}, " +
-                                "Not Started: ${_notStartedBooks.value.size}, " +
-                                "Wishlist: ${_wishlistBooks.value.size}, On The Way: ${_onTheWayBooks.value.size}")
+                        Log.d(TAG, "Library data loaded - Total: ${obtainedBooks.size}, " +
+                                "Read: ${_baseReadBooks.value.size}, Reading: ${_baseReadingBooks.value.size}, " +
+                                "Not Started: ${_baseNotStartedBooks.value.size}")
                     }
 
                     is LibraryResult.Error -> {
@@ -143,6 +168,15 @@ class LibraryViewModel(
             }
         }
     }
+
+    fun updateSearchQuery(query: String) {
+        _searchQuery.value = query
+    }
+
+    fun clearSearch() {
+        _searchQuery.value = ""
+    }
+
 
     fun updateReadingStatus(bookId: Long, newStatus: UserBookReadingStatus) {
         viewModelScope.launch {
