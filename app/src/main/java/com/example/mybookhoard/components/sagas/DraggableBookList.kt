@@ -28,7 +28,7 @@ import com.example.mybookhoard.viewmodels.SagasViewModel
 /**
  * Draggable and reorderable list of books in saga
  * Uses long press to start dragging
- * Fixed version with proper drag detection
+ * Fixed version with proper scroll-aware drag detection
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -50,15 +50,21 @@ fun DraggableBooksList(
             .pointerInput(books.size) {
                 detectDragGesturesAfterLongPress(
                     onDragStart = { offset ->
-                        // Find which item was touched based on Y position
+                        // Calculate item index considering scroll position
                         val itemHeight = 80.dp.toPx() + 8.dp.toPx() // Item height + spacing
+                        val firstVisibleIndex = listState.firstVisibleItemIndex
                         val scrollOffset = listState.firstVisibleItemScrollOffset.toFloat()
-                        val adjustedY = offset.y + scrollOffset
-                        val index = (adjustedY / itemHeight).toInt()
 
-                        if (index in books.indices) {
-                            draggedIndex = index
-                            targetIndex = index
+                        // Calculate index relative to visible area
+                        val adjustedY = offset.y + scrollOffset
+                        val indexInVisibleArea = (adjustedY / itemHeight).toInt()
+
+                        // Add first visible index to get actual index in list
+                        val actualIndex = firstVisibleIndex + indexInVisibleArea
+
+                        if (actualIndex in books.indices) {
+                            draggedIndex = actualIndex
+                            targetIndex = actualIndex
                             dragOffset = offset
                         }
                     },
@@ -68,9 +74,15 @@ fun DraggableBooksList(
                         // Calculate target index based on drag position
                         draggedIndex?.let { dragged ->
                             val itemHeight = 80.dp.toPx() + 8.dp.toPx()
+                            val firstVisibleIndex = listState.firstVisibleItemIndex
                             val scrollOffset = listState.firstVisibleItemScrollOffset.toFloat()
+
+                            // Calculate position in visible area
                             val adjustedY = dragOffset.y + scrollOffset
-                            val newTarget = (adjustedY / itemHeight).toInt()
+                            val indexInVisibleArea = (adjustedY / itemHeight).toInt()
+
+                            // Calculate actual index considering scroll
+                            val newTarget = (firstVisibleIndex + indexInVisibleArea)
                                 .coerceIn(0, books.lastIndex)
 
                             if (newTarget != targetIndex) {
@@ -124,7 +136,7 @@ fun DraggableBooksList(
 
 /**
  * Individual book item that can be dragged
- * Now simplified without individual pointer input
+ * Simplified without individual pointer input
  */
 @Composable
 private fun DraggableBookItem(
@@ -169,49 +181,54 @@ private fun DraggableBookItem(
             // Drag handle
             Icon(
                 imageVector = Icons.Default.DragHandle,
-                contentDescription = "Long press to drag",
+                contentDescription = "Drag to reorder",
                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.size(24.dp)
             )
 
             // Order number
             Surface(
+                color = MaterialTheme.colorScheme.primaryContainer,
                 shape = RoundedCornerShape(8.dp),
-                color = MaterialTheme.colorScheme.primaryContainer
+                modifier = Modifier.size(32.dp)
             ) {
-                Text(
-                    text = order.toString(),
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-                    style = MaterialTheme.typography.labelLarge,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onPrimaryContainer
-                )
+                Box(
+                    contentAlignment = Alignment.Center,
+                    modifier = Modifier.fillMaxSize()
+                ) {
+                    Text(
+                        text = order.toString(),
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer
+                    )
+                }
             }
 
             // Book info
             Column(
                 modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(4.dp)
+                verticalArrangement = Arrangement.Center
             ) {
                 Text(
                     text = book.title,
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.SemiBold,
-                    maxLines = 2,
+                    style = MaterialTheme.typography.bodyLarge,
+                    fontWeight = FontWeight.Medium,
+                    maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
+
             }
 
             // Remove button
             IconButton(
                 onClick = onRemove,
-                colors = IconButtonDefaults.iconButtonColors(
-                    contentColor = MaterialTheme.colorScheme.error
-                )
+                modifier = Modifier.size(40.dp)
             ) {
                 Icon(
                     imageVector = Icons.Default.Close,
-                    contentDescription = "Remove book"
+                    contentDescription = "Remove from saga",
+                    tint = MaterialTheme.colorScheme.error
                 )
             }
         }
