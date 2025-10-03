@@ -312,7 +312,8 @@ class UserBooksApiService(private val context: Context) {
                                 LibraryItem(
                                     book = book,
                                     userBook = userBook,
-                                    authorName = bookJson.optString("author").takeIf { it.isNotBlank() }
+                                    authorName = bookJson.optString("author").takeIf { it.isNotBlank() },
+                                    sagaName = bookJson.optString("saga_name").takeIf { it.isNotBlank() }
                                 )
                             )
 

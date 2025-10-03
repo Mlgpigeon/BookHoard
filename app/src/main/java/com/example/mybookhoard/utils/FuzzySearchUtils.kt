@@ -177,11 +177,75 @@ object FuzzySearchUtils {
 
         return books
             .mapNotNull { bookWithUserData ->
-                val score = calculateBookScore(bookWithUserData.book, normalizedQuery)
+                // Calculate score considering author and saga from extended data
+                val score = calculateBookScoreExtended(
+                    book = bookWithUserData.book,
+                    authorName = bookWithUserData.authorName,
+                    sagaName = bookWithUserData.sagaName,
+                    normalizedQuery = normalizedQuery
+                )
                 if (score > 0) bookWithUserData to score else null
             }
             .sortedByDescending { it.second } // Sort by score descending
             .map { it.first }
+    }
+
+    /**
+     * Calculates relevance score for a book with extended data (includes author and saga names)
+     */
+    private fun calculateBookScoreExtended(
+        book: Book,
+        authorName: String?,
+        sagaName: String?,
+        normalizedQuery: String
+    ): Double {
+        var score = calculateBookScore(book, normalizedQuery)
+
+        // Author match (high weight - 70 points)
+        if (!authorName.isNullOrBlank()) {
+            if (authorName.lowercase() == normalizedQuery) {
+                score += 70.0
+            } else if (authorName.lowercase().contains(normalizedQuery)) {
+                score += 60.0
+                if (authorName.lowercase().startsWith(normalizedQuery)) {
+                    score += 10.0
+                }
+            } else {
+                // Fuzzy author match
+                val authorDistance = levenshteinDistance(
+                    authorName.lowercase(),
+                    normalizedQuery
+                )
+                val authorSimilarity = calculateSimilarity(authorName.lowercase(), normalizedQuery, authorDistance)
+                if (authorSimilarity > 0.6) {
+                    score += authorSimilarity * 50.0
+                }
+            }
+        }
+
+        // Saga match (medium-high weight - 50 points)
+        if (!sagaName.isNullOrBlank()) {
+            if (sagaName.lowercase() == normalizedQuery) {
+                score += 50.0
+            } else if (sagaName.lowercase().contains(normalizedQuery)) {
+                score += 40.0
+                if (sagaName.lowercase().startsWith(normalizedQuery)) {
+                    score += 10.0
+                }
+            } else {
+                // Fuzzy saga match
+                val sagaDistance = levenshteinDistance(
+                    sagaName.lowercase(),
+                    normalizedQuery
+                )
+                val sagaSimilarity = calculateSimilarity(sagaName.lowercase(), normalizedQuery, sagaDistance)
+                if (sagaSimilarity > 0.6) {
+                    score += sagaSimilarity * 35.0
+                }
+            }
+        }
+
+        return score
     }
 
 }
