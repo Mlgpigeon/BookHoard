@@ -2,6 +2,7 @@ package com.example.mybookhoard.api.books
 
 import android.content.Context
 import android.util.Log
+import com.example.mybookhoard.api.auth.AuthApi
 import com.example.mybookhoard.data.entities.Book
 import com.example.mybookhoard.data.entities.BookSource
 import com.example.mybookhoard.data.entities.Saga
@@ -11,12 +12,15 @@ import org.json.JSONObject
 /**
  * API Service for Saga/Series management
  */
-class SagasApiService(private val context: Context) {
+class SagasApiService(
+    private val context: Context,
+    private val authApi: AuthApi
+) {
     companion object {
         private const val TAG = "SagasApiService"
     }
 
-    private val apiClient = BooksApiClient(context)
+    private val apiClient = BooksApiClient(context, authApi)
 
     suspend fun getAllSagas(): SagasResult {
         Log.d(TAG, "=== getAllSagas() called ===")

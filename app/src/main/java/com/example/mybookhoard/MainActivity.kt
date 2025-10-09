@@ -48,15 +48,15 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        val prefs = UserPreferences(this)
-        val authApi = AuthApi(this)
+        val prefs = UserPreferences(applicationContext)
+        val authApi = AuthApi(applicationContext)
         val authRepository = AuthRepository(authApi, prefs)
 
         // Initialize modularized API services
-        val booksApiService = BooksApiService(this)
-        val userBooksApiService = UserBooksApiService(this)
-        val booksCreationApiService = BooksCreationApiService(this)
-        val sagasApiService = SagasApiService(this)
+        val booksApiService = BooksApiService(applicationContext, authApi)
+        val userBooksApiService = UserBooksApiService(applicationContext, authApi)
+        val booksCreationApiService = BooksCreationApiService(applicationContext, authApi)
+        val sagasApiService = SagasApiService(applicationContext, authApi)
 
         // Initialize repositories
         val userBookRepository = UserBookRepository.getInstance(this)

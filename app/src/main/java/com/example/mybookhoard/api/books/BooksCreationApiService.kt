@@ -2,6 +2,7 @@ package com.example.mybookhoard.api.books
 
 import android.content.Context
 import android.util.Log
+import com.example.mybookhoard.api.auth.AuthApi
 import org.json.JSONObject
 
 /**
@@ -10,12 +11,15 @@ import org.json.JSONObject
  *
  * Note: Uses ApiBook from ApiBook.kt for responses
  */
-class BooksCreationApiService(private val context: Context) {
+class BooksCreationApiService(
+    private val context: Context,
+    private val authApi: AuthApi
+) {
     companion object {
         private const val TAG = "BooksCreationApi"
     }
 
-    private val apiClient = BooksApiClient(context)
+    private val apiClient = BooksApiClient(context, authApi)
 
     /**
      * Search authors by name for suggestions

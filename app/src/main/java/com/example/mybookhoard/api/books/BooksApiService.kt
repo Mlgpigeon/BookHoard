@@ -2,6 +2,7 @@ package com.example.mybookhoard.api.books
 
 import android.content.Context
 import android.util.Log
+import com.example.mybookhoard.api.auth.AuthApi
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -9,12 +10,15 @@ import org.json.JSONObject
  * Service for book-related API operations (search, public books, etc.)
  * Path: app/src/main/java/com/example/mybookhoard/api/books/BooksApiService.kt
  */
-class BooksApiService(private val context: Context) {
+class BooksApiService(
+    private val context: Context,
+    private val authApi: AuthApi
+) {
     companion object {
         private const val TAG = "BooksApiService"
     }
 
-    private val apiClient = BooksApiClient(context)
+    private val apiClient = BooksApiClient(context, authApi)
 
     /**
      * Search books in the remote API - uses dedicated search endpoint

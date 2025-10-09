@@ -30,6 +30,8 @@ class AuthApi(private val context: Context) {
         private const val BASE_URL = "https://api.mybookhoard.com/api"
         private const val PREFS_NAME = "bookhoard_auth"
         private const val TOKEN_KEY = "auth_token"
+
+        private const val REFRESH_TOKEN_KEY = "refresh_token"
         private const val USER_ID_KEY = "user_id"
         private const val USERNAME_KEY = "username"
         private const val EMAIL_KEY = "email"
@@ -113,9 +115,10 @@ class AuthApi(private val context: Context) {
         }
     }
 
-    private fun saveUser(user: User, token: String) {
+    private fun saveUser(user: User, token: String, refreshToken: String) {
         prefs.edit().apply {
             putString(TOKEN_KEY, token)
+            putString(REFRESH_TOKEN_KEY, refreshToken) // NUEVO
             putLong(USER_ID_KEY, user.id)
             putString(USERNAME_KEY, user.username)
             putString(EMAIL_KEY, user.email)
@@ -128,17 +131,65 @@ class AuthApi(private val context: Context) {
         Log.d(TAG, "User session saved: ${user.username} (ID: ${user.id})")
     }
 
+    fun getRefreshToken(): String? {
+        return prefs.getString(REFRESH_TOKEN_KEY, null)
+    }
+
+    suspend fun refreshAccessToken(): AuthResult = withContext(Dispatchers.IO) {
+        val refreshToken = getRefreshToken()
+        if (refreshToken == null) {
+            Log.e(TAG, "No refresh token available")
+            return@withContext AuthResult.Error("No refresh token available")
+        }
+
+        val body = JSONObject().apply {
+            put("refresh_token", refreshToken)
+        }
+
+        val response = makeRequest("auth/refresh", "POST", body, requireAuth = false)
+
+        return@withContext if (response.isSuccessful()) {
+            try {
+                val json = JSONObject(response.body)
+                val data = json.getJSONObject("data")
+                val newAccessToken = data.getString("access_token")
+
+                // Guardar el nuevo access token
+                prefs.edit().putString(TOKEN_KEY, newAccessToken).apply()
+                Log.d(TAG, "Access token refreshed successfully")
+
+                // Obtener el usuario actual de las preferencias
+                val savedUser = getSavedUser()
+                if (savedUser != null) {
+                    AuthResult.Success(savedUser, newAccessToken)
+                } else {
+                    AuthResult.Error("Failed to retrieve user data after refresh")
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to parse refresh response: ${e.message}")
+                AuthResult.Error("Failed to refresh token: ${e.message}")
+            }
+        } else {
+            Log.e(TAG, "Token refresh failed: ${response.code}")
+            AuthResult.Error(parseError(response.body))
+        }
+    }
+
     private fun parseAuthResponse(response: ApiResponse): AuthResult {
         return if (response.isSuccessful()) {
             try {
                 val json = JSONObject(response.body)
                 val data = json.getJSONObject("data")
-                val token = data.getString("token")
+
+                // CAMBIO: Ahora viene access_token en lugar de token
+                val accessToken = data.getString("access_token")
+                val refreshToken = data.getString("refresh_token")
+
                 val userData = data.getJSONObject("user")
                 val user = User.fromJson(userData)
 
-                saveUser(user, token)
-                AuthResult.Success(user, token)
+                saveUser(user, accessToken, refreshToken)
+                AuthResult.Success(user, accessToken)
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to parse auth response: ${e.message}")
                 AuthResult.Error("Failed to parse authentication response: ${e.message}")

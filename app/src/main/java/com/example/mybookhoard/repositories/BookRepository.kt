@@ -13,7 +13,7 @@ import java.util.Date
  * Repository for Book operations
  * Ready for future API integration while handling local database
  */
-class BookRepository private constructor(context: Context) {
+class BookRepository public constructor(context: Context) {
 
     private val bookDao: BookDao = AppDb.get(context).bookDao()
     private val authorRepository: AuthorRepository = AuthorRepository.getInstance(context)

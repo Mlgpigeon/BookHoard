@@ -2,6 +2,7 @@ package com.example.mybookhoard.api.books
 
 import android.content.Context
 import android.util.Log
+import com.example.mybookhoard.api.auth.AuthApi
 import com.example.mybookhoard.data.entities.Book
 import com.example.mybookhoard.data.entities.BookSource
 import com.example.mybookhoard.data.entities.UserBook
@@ -14,12 +15,15 @@ import org.json.JSONObject
  * Service for user book-related API operations
  * Path: app/src/main/java/com/example/mybookhoard/api/books/UserBooksApiService.kt
  */
-class UserBooksApiService(private val context: Context) {
+class UserBooksApiService(
+    private val context: Context,
+    private val authApi: AuthApi
+) {
     companion object {
         private const val TAG = "UserBooksApiService"
     }
 
-    private val apiClient = BooksApiClient(context)
+    private val apiClient = BooksApiClient(context, authApi)
 
     /**
      * Update user book status (reading and/or wishlist status)

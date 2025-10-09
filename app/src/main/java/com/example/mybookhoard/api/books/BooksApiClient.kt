@@ -13,12 +13,17 @@ import java.net.HttpURLConnection
 import java.net.SocketTimeoutException
 import java.net.URL
 import java.net.UnknownHostException
+import com.example.mybookhoard.api.auth.AuthApi
+import com.example.mybookhoard.api.auth.AuthResult
 
 /**
  * Base HTTP client for Books API requests
  * Path: app/src/main/java/com/example/mybookhoard/api/books/BooksApiClient.kt
  */
-class BooksApiClient(private val context: Context) {
+class BooksApiClient(
+    private val context: Context,
+    private val authApi: AuthApi? = null
+) {
     companion object {
         private const val BASE_URL = "https://api.mybookhoard.com/api"
         private const val TAG = "BooksApiClient"
@@ -36,7 +41,8 @@ class BooksApiClient(private val context: Context) {
     suspend fun makeAuthenticatedRequest(
         endpoint: String,
         method: String,
-        body: JSONObject? = null
+        body: JSONObject? = null,
+        isRetry: Boolean = false // NUEVO: para evitar loops infinitos
     ): ApiResponse = withContext(Dispatchers.IO) {
 
         return@withContext withTimeoutOrNull(REQUEST_TIMEOUT) {
@@ -67,6 +73,29 @@ class BooksApiClient(private val context: Context) {
                 }
 
                 val responseCode = connection.responseCode
+
+                // NUEVO: Si recibimos 401 y no es un retry, intentar refrescar el token
+                if (responseCode == 401 && !isRetry && authApi != null) {
+                    Log.w(TAG, "Received 401, attempting token refresh...")
+
+                    when (val refreshResult = authApi.refreshAccessToken()) {
+                        is AuthResult.Success -> {
+                            Log.d(TAG, "Token refreshed successfully, retrying request...")
+                            // Reintentar la petición original con el nuevo token
+                            return@withTimeoutOrNull makeAuthenticatedRequest(
+                                endpoint,
+                                method,
+                                body,
+                                isRetry = true
+                            )
+                        }
+                        is AuthResult.Error -> {
+                            Log.e(TAG, "Token refresh failed: ${refreshResult.message}")
+                            // El refresh falló, devolver el 401 original
+                        }
+                    }
+                }
+
                 val responseBody = if (responseCode >= 400) {
                     BufferedReader(InputStreamReader(connection.errorStream ?: connection.inputStream)).use {
                         it.readText()
@@ -92,6 +121,7 @@ class BooksApiClient(private val context: Context) {
             }
         } ?: ApiResponse(408, """{"message": "Request timeout"}""")
     }
+
 
     /**
      * Parse error message from response body
