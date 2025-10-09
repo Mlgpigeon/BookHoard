@@ -146,17 +146,26 @@ class SearchViewModel(
                     is BooksActionResult.Success -> {
                         Log.d("SearchViewModel", "Book added successfully: ${result.message}")
 
-                        // Add a small delay to ensure the database has been updated
-                        delay(500)
+                        // Instead of refreshing entire search, update only the specific book's state
+                        val currentState = _uiState.value
+                        if (currentState is SearchUiState.Success) {
+                            // Get updated user book data for this specific book
+                            val updatedUserBook = getUserBookForBook(book.id)
 
-                        // Refresh search results to update the button state
-                        if (lastSearchQuery.isNotBlank()) {
-                            Log.d("SearchViewModel", "Refreshing search results...")
-                            performSearch()
-                        } else {
-                            Log.w("SearchViewModel", "No search query to refresh")
+                            // Update only the affected book in the current results
+                            val updatedBooks = currentState.books.map { bookWithData ->
+                                if (bookWithData.book.id == book.id) {
+                                    bookWithData.copy(userBook = updatedUserBook)
+                                } else {
+                                    bookWithData
+                                }
+                            }
+
+                            _uiState.value = SearchUiState.Success(updatedBooks)
+                            Log.d("SearchViewModel", "Updated book state in place without re-searching")
                         }
                     }
+
                     is BooksActionResult.Error -> {
                         Log.e("SearchViewModel", "Failed to add book to collection: ${result.message}")
                         _uiState.value = SearchUiState.Error("Failed to add book: ${result.message}")
@@ -176,9 +185,20 @@ class SearchViewModel(
             try {
                 when (val result = userBooksApiService.removeBookFromCollection(bookId)) {
                     is BooksActionResult.Success -> {
-                        // Refresh search results to update the button state
-                        if (lastSearchQuery.isNotBlank()) {
-                            performSearch()
+                        // Update only the specific book's state instead of refreshing entire search
+                        val currentState = _uiState.value
+                        if (currentState is SearchUiState.Success) {
+                            // Remove user book data for this specific book
+                            val updatedBooks = currentState.books.map { bookWithData ->
+                                if (bookWithData.book.id == bookId) {
+                                    bookWithData.copy(userBook = null)
+                                } else {
+                                    bookWithData
+                                }
+                            }
+
+                            _uiState.value = SearchUiState.Success(updatedBooks)
+                            Log.d("SearchViewModel", "Updated book removal state in place without re-searching")
                         }
                     }
                     is BooksActionResult.Error -> {
