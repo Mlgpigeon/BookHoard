@@ -7,6 +7,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.*
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -17,6 +18,7 @@ import com.example.mybookhoard.data.entities.UserBookReadingStatus
 import com.example.mybookhoard.data.entities.UserBookWishlistStatus
 import com.example.mybookhoard.viewmodels.LibraryViewModel
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MyLibraryTab(
     libraryViewModel: LibraryViewModel,
@@ -27,6 +29,7 @@ fun MyLibraryTab(
     val readingBooks by libraryViewModel.readingBooks.collectAsState()
     val notStartedBooks by libraryViewModel.notStartedBooks.collectAsState()
     val isLoading by libraryViewModel.isLoading.collectAsState()
+    val isRefreshing by libraryViewModel.isRefreshing.collectAsState()
     val searchQuery by libraryViewModel.searchQuery.collectAsState()
 
     if (isLoading) {
@@ -35,75 +38,66 @@ fun MyLibraryTab(
             message = "Loading your library..."
         )
     } else {
-        LazyColumn(
-            modifier = modifier.fillMaxSize(),
-            contentPadding = PaddingValues(16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+        PullToRefreshBox(
+            isRefreshing = isRefreshing,
+            onRefresh = { libraryViewModel.refresh() },
+            modifier = modifier.fillMaxSize()
         ) {
-            // Search bar
-            item {
-                LibrarySearchBar(
-                    query = searchQuery,
-                    onQueryChange = libraryViewModel::updateSearchQuery,
-                    onClearSearch = libraryViewModel::clearSearch,
-                    modifier = Modifier.fillMaxWidth()
-                )
-            }
+            LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(16.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                // Search bar
+                item {
+                    LibrarySearchBar(
+                        query = searchQuery,
+                        onQueryChange = libraryViewModel::updateSearchQuery,
+                        onClearSearch = libraryViewModel::clearSearch,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
 
-            // Library stats banner
-            item {
-                LibraryStatsCard(stats = libraryStats)
-            }
+                // Library stats banner
+                item {
+                    LibraryStatsCard(stats = libraryStats)
+                }
 
-            // Reading section
-            item {
-                ExpandableBookSection(
-                    title = "Currently Reading",
-                    books = readingBooks,
-                    onReadingStatusChange = { bookId, newStatus ->
-                        libraryViewModel.updateReadingStatus(bookId, newStatus)
-                    },
-                    onWishlistStatusChange = { bookId, newStatus ->
-                        libraryViewModel.updateWishlistStatus(bookId, newStatus)
-                    },
-                    onRemoveFromCollection = { bookId ->
-                        libraryViewModel.removeBookFromCollection(bookId)
-                    }
-                )
-            }
+                // Reading section
+                item {
+                    ExpandableBookSection(
+                        title = "Reading",
+                        books = readingBooks,
+                        onReadingStatusChange = libraryViewModel::updateReadingStatus,
+                        onWishlistStatusChange = libraryViewModel::updateWishlistStatus,
+                        onRemoveFromCollection = libraryViewModel::removeBookFromCollection,
+                        showReadingStatusButton = true
+                    )
+                }
 
-            // Not started section
-            item {
-                ExpandableBookSection(
-                    title = "Not Started",
-                    books = notStartedBooks,
-                    onReadingStatusChange = { bookId, newStatus ->
-                        libraryViewModel.updateReadingStatus(bookId, newStatus)
-                    },
-                    onWishlistStatusChange = { bookId, newStatus ->
-                        libraryViewModel.updateWishlistStatus(bookId, newStatus)
-                    },
-                    onRemoveFromCollection = { bookId ->
-                        libraryViewModel.removeBookFromCollection(bookId)
-                    }
-                )
-            }
+                // Not Started section
+                item {
+                    ExpandableBookSection(
+                        title = "Not Started",
+                        books = notStartedBooks,
+                        onReadingStatusChange = libraryViewModel::updateReadingStatus,
+                        onWishlistStatusChange = libraryViewModel::updateWishlistStatus,
+                        onRemoveFromCollection = libraryViewModel::removeBookFromCollection,
+                        showReadingStatusButton = true
+                    )
+                }
 
-            // Read section
-            item {
-                ExpandableBookSection(
-                    title = "Finished Reading",
-                    books = readBooks,
-                    onReadingStatusChange = { bookId, newStatus ->
-                        libraryViewModel.updateReadingStatus(bookId, newStatus)
-                    },
-                    onWishlistStatusChange = { bookId, newStatus ->
-                        libraryViewModel.updateWishlistStatus(bookId, newStatus)
-                    },
-                    onRemoveFromCollection = { bookId ->
-                        libraryViewModel.removeBookFromCollection(bookId)
-                    }
-                )
+                // Read section
+                item {
+                    ExpandableBookSection(
+                        title = "Read",
+                        books = readBooks,
+                        onReadingStatusChange = libraryViewModel::updateReadingStatus,
+                        onWishlistStatusChange = libraryViewModel::updateWishlistStatus,
+                        onRemoveFromCollection = libraryViewModel::removeBookFromCollection,
+                        showReadingStatusButton = false
+                    )
+                }
             }
         }
     }

@@ -15,6 +15,7 @@ import com.example.mybookhoard.data.entities.*
 import com.example.mybookhoard.utils.BookSorting
 import kotlinx.coroutines.FlowPreview
 import com.example.mybookhoard.utils.FuzzySearchUtils
+
 @OptIn(FlowPreview::class)
 class LibraryViewModel(
     private val userBookRepository: UserBookRepository,
@@ -102,6 +103,8 @@ class LibraryViewModel(
     // Loading states
     private val _isLoading = MutableStateFlow(false)
     val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
+    private val _isRefreshing = MutableStateFlow(false)
+    val isRefreshing: StateFlow<Boolean> = _isRefreshing.asStateFlow()
 
     private val _error = MutableStateFlow<String?>(null)
     val error: StateFlow<String?> = _error.asStateFlow()
@@ -205,6 +208,17 @@ class LibraryViewModel(
 
     fun clearWishlistSearch() {
         _wishlistSearchQuery.value = ""
+    }
+
+    fun refresh() {
+        viewModelScope.launch {
+            _isRefreshing.value = true
+            try {
+                loadLibraryData()
+            } finally {
+                _isRefreshing.value = false
+            }
+        }
     }
 
     fun updateReadingStatus(bookId: Long, newStatus: UserBookReadingStatus) {
