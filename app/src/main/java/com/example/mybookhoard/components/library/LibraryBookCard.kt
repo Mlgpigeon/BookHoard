@@ -1,15 +1,24 @@
+// ============================================================================
+// ARCHIVO COMPLETO: app/src/main/java/com/example/mybookhoard/components/library/LibraryBookCard.kt
+// Cambios marcados con ✅ NUEVO o ✅ CAMBIADO
+// ============================================================================
+
 package com.example.mybookhoard.components.library
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape  // ✅ NUEVO
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip  // ✅ NUEVO
+import androidx.compose.ui.layout.ContentScale  // ✅ NUEVO
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import coil.compose.AsyncImage  // ✅ NUEVO
 import com.example.mybookhoard.data.entities.*
 import com.example.mybookhoard.components.dialogs.RemoveBookDialog
 import com.example.mybookhoard.components.dialogs.WishlistSelectionDialog
@@ -62,12 +71,34 @@ fun LibraryBookCard(
                 }
                 Spacer(modifier = Modifier.height(8.dp))
             }
+
+            // ============================================================================
+            // ✅ CAMBIADO: Este Row ahora usa spacedBy en lugar de SpaceBetween
+            // ============================================================================
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
+                horizontalArrangement = Arrangement.spacedBy(12.dp),  // ✅ CAMBIADO de SpaceBetween
                 verticalAlignment = Alignment.Top
             ) {
-                // Book info
+                // ============================================================================
+                // ✅ NUEVO: Bloque completo para mostrar la imagen de portada
+                // ============================================================================
+                if (!book.coverSelected.isNullOrBlank()) {
+                    AsyncImage(
+                        model = book.coverSelected,
+                        contentDescription = "Cover of ${book.title}",
+                        modifier = Modifier
+                            .width(60.dp)
+                            .height(90.dp)
+                            .clip(RoundedCornerShape(4.dp)),
+                        contentScale = ContentScale.Crop
+                    )
+                }
+                // ============================================================================
+                // FIN DEL BLOQUE NUEVO
+                // ============================================================================
+
+                // Book info (Este bloque NO cambia, solo se desplaza a la derecha si hay imagen)
                 Column(
                     modifier = Modifier.weight(1f)
                 ) {
@@ -104,7 +135,7 @@ fun LibraryBookCard(
                     }
                 }
 
-                // Action button
+                // Action button (NO cambia)
                 Box {
                     IconButton(
                         onClick = { showActionsMenu = true }
@@ -189,11 +220,10 @@ fun LibraryBookCard(
                     }
                 }
             }
-
         }
     }
 
-    // Dialogs
+    // Dialogs (NO cambian)
     if (showWishlistDialog) {
         WishlistSelectionDialog(
             onDismiss = { showWishlistDialog = false },
@@ -216,6 +246,7 @@ fun LibraryBookCard(
     }
 }
 
+// Componentes auxiliares (NO cambian)
 @Composable
 private fun BookMetadataChip(
     text: String,
