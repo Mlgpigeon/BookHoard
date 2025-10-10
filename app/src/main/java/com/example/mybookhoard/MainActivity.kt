@@ -52,6 +52,7 @@ import com.example.mybookhoard.viewmodels.SearchViewModel
 import com.example.mybookhoard.viewmodels.LibraryViewModel
 import com.example.mybookhoard.viewmodels.AddBookViewModel
 import com.example.mybookhoard.viewmodels.SagasViewModel
+import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -342,38 +343,30 @@ class MainActivity : ComponentActivity() {
                             val allBooks = remember { mutableStateOf<BookWithUserDataExtended?>(null) }
 
                             LaunchedEffect(userBookId, bookId) {
-                                // Try to find the book in the library data
-                                libraryVm.readBooks.collect { readBooks ->
-                                    val found = readBooks.find {
-                                        it.userBook?.id == userBookId && it.book.id == bookId
-                                    }
-                                    if (found != null) {
-                                        allBooks.value = found
-                                    }
-                                }
-                            }
-
-                            LaunchedEffect(userBookId, bookId) {
-                                libraryVm.readingBooks.collect { readingBooks ->
-                                    if (allBooks.value == null) {
-                                        val found = readingBooks.find {
-                                            it.userBook?.id == userBookId && it.book.id == bookId
-                                        }
-                                        if (found != null) {
-                                            allBooks.value = found
+                                launch {
+                                    libraryVm.readBooks.collect { readBooks ->
+                                        if (allBooks.value == null) {
+                                            readBooks.find {
+                                                it.userBook?.id == userBookId && it.book.id == bookId
+                                            }?.let { allBooks.value = it }
                                         }
                                     }
                                 }
-                            }
-
-                            LaunchedEffect(userBookId, bookId) {
-                                libraryVm.notStartedBooks.collect { notStartedBooks ->
-                                    if (allBooks.value == null) {
-                                        val found = notStartedBooks.find {
-                                            it.userBook?.id == userBookId && it.book.id == bookId
+                                launch {
+                                    libraryVm.readingBooks.collect { readingBooks ->
+                                        if (allBooks.value == null) {
+                                            readingBooks.find {
+                                                it.userBook?.id == userBookId && it.book.id == bookId
+                                            }?.let { allBooks.value = it }
                                         }
-                                        if (found != null) {
-                                            allBooks.value = found
+                                    }
+                                }
+                                launch {
+                                    libraryVm.notStartedBooks.collect { notStartedBooks ->
+                                        if (allBooks.value == null) {
+                                            notStartedBooks.find {
+                                                it.userBook?.id == userBookId && it.book.id == bookId
+                                            }?.let { allBooks.value = it }
                                         }
                                     }
                                 }

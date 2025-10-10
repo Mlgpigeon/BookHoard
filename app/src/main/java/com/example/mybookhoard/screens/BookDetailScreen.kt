@@ -68,9 +68,9 @@ fun BookDetailScreen(
                 )
 
                 // Author info
-                bookWithUserData.book.primaryAuthorId?.let { author ->
+                if (!bookWithUserData.authorName.isNullOrBlank()) {
                     Text(
-                        text = "by ${bookWithUserData.book.primaryAuthorId}",
+                        text = "by ${bookWithUserData.authorName}",
                         style = MaterialTheme.typography.titleMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         textAlign = TextAlign.Center

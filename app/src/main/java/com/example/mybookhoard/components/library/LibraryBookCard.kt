@@ -79,13 +79,13 @@ fun LibraryBookCard(
                         overflow = TextOverflow.Ellipsis
                     )
 
-                    if (!book.description.isNullOrBlank()) {
+                    if (!bookWithUserData.authorName.isNullOrBlank()) {
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(
-                            text = book.description,
+                            text = "by ${bookWithUserData.authorName}",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            maxLines = 2,
+                            maxLines = 1,
                             overflow = TextOverflow.Ellipsis
                         )
                     }
