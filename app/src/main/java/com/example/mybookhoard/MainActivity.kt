@@ -130,7 +130,9 @@ class MainActivity : ComponentActivity() {
                 val authVm: AuthViewModel = viewModel(factory = authFactory)
                 val authState by authVm.state.collectAsState()
 
-                NavHost(navController = nav, startDestination = "auth") {
+                val startDest = if (authState is AuthState.Authenticated) "library" else "auth"
+
+                NavHost(navController = nav, startDestination = startDest) {
                     composable("auth") {
                         AuthScreen(
                             authState = authState,
@@ -402,29 +404,33 @@ class MainActivity : ComponentActivity() {
                 }
 
                 // Handle navigation based on auth state changes
+                // Handle navigation based on auth state changes
                 LaunchedEffect(authState) {
+                    val currentRoute = nav.currentBackStackEntry?.destination?.route
+
                     when (authState) {
                         is AuthState.Authenticated -> {
-                            nav.navigate("library") {
-                                popUpTo("auth") { inclusive = true }
+                            // Solo navegar si NO estamos ya en una pantalla autenticada
+                            if (currentRoute == "auth") {
+                                nav.navigate("library") {
+                                    popUpTo("auth") { inclusive = true }
+                                }
                             }
                         }
                         is AuthState.NotAuthenticated -> {
-                            nav.navigate("auth") {
-                                popUpTo("search") { inclusive = true }
-                                popUpTo("library") { inclusive = true }
-                                popUpTo("profile") { inclusive = true }
-                                popUpTo("add_book") { inclusive = true }
-                                popUpTo("sagas") { inclusive = true }
+                            // Solo navegar si NO estamos ya en auth
+                            if (currentRoute != "auth") {
+                                nav.navigate("auth") {
+                                    popUpTo(0) { inclusive = true }
+                                }
                             }
                         }
                         is AuthState.Error -> {
-                            nav.navigate("auth") {
-                                popUpTo("search") { inclusive = true }
-                                popUpTo("library") { inclusive = true }
-                                popUpTo("profile") { inclusive = true }
-                                popUpTo("add_book") { inclusive = true }
-                                popUpTo("sagas") { inclusive = true }
+                            // Solo navegar en caso de error si NO estamos ya en auth
+                            if (currentRoute != "auth") {
+                                nav.navigate("auth") {
+                                    popUpTo(0) { inclusive = true }
+                                }
                             }
                         }
                         is AuthState.Authenticating -> {

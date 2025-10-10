@@ -16,6 +16,7 @@ import com.example.mybookhoard.repositories.AuthorRepository
 import com.example.mybookhoard.utils.BookSorting
 import kotlinx.coroutines.FlowPreview
 import com.example.mybookhoard.utils.FuzzySearchUtils
+import kotlinx.coroutines.Dispatchers
 
 @OptIn(FlowPreview::class)
 class LibraryViewModel(
@@ -123,56 +124,58 @@ class LibraryViewModel(
     }
 
     private fun loadLibraryDataFromLocal() {
-        viewModelScope.launch {
+        viewModelScope.launch(Dispatchers.IO) {  // ✅ Usar IO dispatcher
             _isLoading.value = true
             try {
                 // Load from local database first
-                userBookRepository.getBooksWithUserDataExtended(userId).collect { booksWithUserData ->
-                    val obtainedBooks = booksWithUserData.filter {
-                        it.userBook?.wishlistStatus == UserBookWishlistStatus.OBTAINED
+                userBookRepository.getBooksWithUserDataExtended(userId)
+                    .flowOn(Dispatchers.IO)  // ✅ Asegurar que el Flow se ejecute en IO
+                    .collect { booksWithUserData ->
+                        val obtainedBooks = booksWithUserData.filter {
+                            it.userBook?.wishlistStatus == UserBookWishlistStatus.OBTAINED
+                        }
+
+                        _baseReadBooks.value = BookSorting.sortBySaga(
+                            obtainedBooks.filter {
+                                it.userBook?.readingStatus == UserBookReadingStatus.READ
+                            }
+                        )
+
+                        _baseReadingBooks.value = BookSorting.sortBySaga(
+                            obtainedBooks.filter {
+                                it.userBook?.readingStatus == UserBookReadingStatus.READING
+                            }
+                        )
+
+                        _baseNotStartedBooks.value = BookSorting.sortBySaga(
+                            obtainedBooks.filter {
+                                it.userBook?.readingStatus == UserBookReadingStatus.NOT_STARTED ||
+                                        it.userBook?.readingStatus == null
+                            }
+                        )
+
+                        _baseWishlistBooks.value = BookSorting.sortBySaga(
+                            booksWithUserData.filter {
+                                it.userBook?.wishlistStatus == UserBookWishlistStatus.WISH
+                            }
+                        )
+
+                        _baseOnTheWayBooks.value = BookSorting.sortBySaga(
+                            booksWithUserData.filter {
+                                it.userBook?.wishlistStatus == UserBookWishlistStatus.ON_THE_WAY
+                            }
+                        )
+
+                        _libraryStats.value = LibraryStats(
+                            totalBooks = obtainedBooks.size,
+                            readBooks = _baseReadBooks.value.size,
+                            readingBooks = _baseReadingBooks.value.size,
+                            notStartedBooks = _baseNotStartedBooks.value.size
+                        )
+
+                        Log.d(TAG, "Library data loaded from local - Total: ${obtainedBooks.size}")
+                        _isLoading.value = false
                     }
-
-                    _baseReadBooks.value = BookSorting.sortBySaga(
-                        obtainedBooks.filter {
-                            it.userBook?.readingStatus == UserBookReadingStatus.READ
-                        }
-                    )
-
-                    _baseReadingBooks.value = BookSorting.sortBySaga(
-                        obtainedBooks.filter {
-                            it.userBook?.readingStatus == UserBookReadingStatus.READING
-                        }
-                    )
-
-                    _baseNotStartedBooks.value = BookSorting.sortBySaga(
-                        obtainedBooks.filter {
-                            it.userBook?.readingStatus == UserBookReadingStatus.NOT_STARTED ||
-                                    it.userBook?.readingStatus == null
-                        }
-                    )
-
-                    _baseWishlistBooks.value = BookSorting.sortBySaga(
-                        booksWithUserData.filter {
-                            it.userBook?.wishlistStatus == UserBookWishlistStatus.WISH
-                        }
-                    )
-
-                    _baseOnTheWayBooks.value = BookSorting.sortBySaga(
-                        booksWithUserData.filter {
-                            it.userBook?.wishlistStatus == UserBookWishlistStatus.ON_THE_WAY
-                        }
-                    )
-
-                    _libraryStats.value = LibraryStats(
-                        totalBooks = obtainedBooks.size,
-                        readBooks = _baseReadBooks.value.size,
-                        readingBooks = _baseReadingBooks.value.size,
-                        notStartedBooks = _baseNotStartedBooks.value.size
-                    )
-
-                    Log.d(TAG, "Library data loaded from local - Total: ${obtainedBooks.size}")
-                    _isLoading.value = false
-                }
             } catch (e: Exception) {
                 Log.e(TAG, "Exception loading library data from local", e)
                 _error.value = "Failed to load library: ${e.message}"
