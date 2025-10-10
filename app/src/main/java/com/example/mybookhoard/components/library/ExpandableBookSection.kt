@@ -1,3 +1,5 @@
+// File: app/src/main/java/com/example/mybookhoard/components/library/ExpandableBookSection.kt
+
 package com.example.mybookhoard.components.library
 
 import androidx.compose.animation.AnimatedVisibility
@@ -12,6 +14,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.mybookhoard.data.entities.*
@@ -24,6 +27,7 @@ fun ExpandableBookSection(
     onWishlistStatusChange: (Long, UserBookWishlistStatus) -> Unit,
     onRemoveFromCollection: (Long) -> Unit,
     showReadingStatusButton: Boolean = true,
+    backgroundColor: Color = Color.Unspecified,
     modifier: Modifier = Modifier
 ) {
     var isExpanded by remember { mutableStateOf(true) }
@@ -32,7 +36,10 @@ fun ExpandableBookSection(
         // Section header
         Card(
             colors = CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.surfaceVariant
+                containerColor = if (backgroundColor != Color.Unspecified)
+                    backgroundColor
+                else
+                    MaterialTheme.colorScheme.surfaceVariant
             ),
             modifier = Modifier
                 .fillMaxWidth()

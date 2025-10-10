@@ -17,6 +17,7 @@ import com.example.mybookhoard.components.library.ExpandableBookSection
 import com.example.mybookhoard.data.entities.UserBookReadingStatus
 import com.example.mybookhoard.data.entities.UserBookWishlistStatus
 import com.example.mybookhoard.viewmodels.LibraryViewModel
+import androidx.compose.ui.graphics.Color
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -62,41 +63,48 @@ fun MyLibraryTab(
                 item {
                     LibraryStatsCard(stats = libraryStats)
                 }
-
-                // Reading section
-                item {
-                    ExpandableBookSection(
-                        title = "Reading",
-                        books = readingBooks,
-                        onReadingStatusChange = libraryViewModel::updateReadingStatus,
-                        onWishlistStatusChange = libraryViewModel::updateWishlistStatus,
-                        onRemoveFromCollection = libraryViewModel::removeBookFromCollection,
-                        showReadingStatusButton = true
-                    )
+                if (readingBooks.isNotEmpty()) {
+                    item {
+                        ExpandableBookSection(
+                            title = "Reading",
+                            books = readingBooks,
+                            onReadingStatusChange = libraryViewModel::updateReadingStatus,
+                            onWishlistStatusChange = libraryViewModel::updateWishlistStatus,
+                            onRemoveFromCollection = libraryViewModel::removeBookFromCollection,
+                            showReadingStatusButton = true,
+                            backgroundColor = Color(0xFFB3D9FF) // Soft pastel blue
+                        )
+                    }
                 }
 
-                // Not Started section
-                item {
-                    ExpandableBookSection(
-                        title = "Not Started",
-                        books = notStartedBooks,
-                        onReadingStatusChange = libraryViewModel::updateReadingStatus,
-                        onWishlistStatusChange = libraryViewModel::updateWishlistStatus,
-                        onRemoveFromCollection = libraryViewModel::removeBookFromCollection,
-                        showReadingStatusButton = true
-                    )
+                // Not Started section - only show if not empty
+                if (notStartedBooks.isNotEmpty()) {
+                    item {
+                        ExpandableBookSection(
+                            title = "Not Started",
+                            books = notStartedBooks,
+                            onReadingStatusChange = libraryViewModel::updateReadingStatus,
+                            onWishlistStatusChange = libraryViewModel::updateWishlistStatus,
+                            onRemoveFromCollection = libraryViewModel::removeBookFromCollection,
+                            showReadingStatusButton = true,
+                            backgroundColor = Color(0xFFFFD4B3) // Soft pastel peach
+                        )
+                    }
                 }
 
-                // Read section
-                item {
-                    ExpandableBookSection(
-                        title = "Read",
-                        books = readBooks,
-                        onReadingStatusChange = libraryViewModel::updateReadingStatus,
-                        onWishlistStatusChange = libraryViewModel::updateWishlistStatus,
-                        onRemoveFromCollection = libraryViewModel::removeBookFromCollection,
-                        showReadingStatusButton = false
-                    )
+                // Read section - only show if not empty
+                if (readBooks.isNotEmpty()) {
+                    item {
+                        ExpandableBookSection(
+                            title = "Read",
+                            books = readBooks,
+                            onReadingStatusChange = libraryViewModel::updateReadingStatus,
+                            onWishlistStatusChange = libraryViewModel::updateWishlistStatus,
+                            onRemoveFromCollection = libraryViewModel::removeBookFromCollection,
+                            showReadingStatusButton = false,
+                            backgroundColor = Color(0xFFB8E6B8) // Soft pastel green
+                        )
+                    }
                 }
             }
         }
