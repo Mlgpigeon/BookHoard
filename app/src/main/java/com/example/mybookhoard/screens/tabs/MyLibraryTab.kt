@@ -23,6 +23,7 @@ import androidx.compose.ui.graphics.Color
 @Composable
 fun MyLibraryTab(
     libraryViewModel: LibraryViewModel,
+    onNavigateToBookDetail: (Long, Long) -> Unit,
     modifier: Modifier = Modifier
 ) {
     val libraryStats by libraryViewModel.libraryStats.collectAsState()
@@ -71,8 +72,13 @@ fun MyLibraryTab(
                             onReadingStatusChange = libraryViewModel::updateReadingStatus,
                             onWishlistStatusChange = libraryViewModel::updateWishlistStatus,
                             onRemoveFromCollection = libraryViewModel::removeBookFromCollection,
+                            onBookClick = { bookWithUserData ->
+                                bookWithUserData.userBook?.id?.let { userBookId ->
+                                    onNavigateToBookDetail(userBookId, bookWithUserData.book.id)
+                                }
+                            },
                             showReadingStatusButton = true,
-                            backgroundColor = Color(0xFFB3D9FF) // Soft pastel blue
+                            backgroundColor = Color(0xFFB3D9FF)
                         )
                     }
                 }
@@ -86,6 +92,10 @@ fun MyLibraryTab(
                             onReadingStatusChange = libraryViewModel::updateReadingStatus,
                             onWishlistStatusChange = libraryViewModel::updateWishlistStatus,
                             onRemoveFromCollection = libraryViewModel::removeBookFromCollection,
+                            onBookClick = { book ->  // AÑADIR ESTE PARÁMETRO
+                                val userBookId = book.userBook?.id ?: return@ExpandableBookSection
+                                onNavigateToBookDetail(userBookId, book.book.id)
+                            },
                             showReadingStatusButton = true,
                             backgroundColor = Color(0xFFFFD4B3) // Soft pastel peach
                         )
@@ -101,6 +111,10 @@ fun MyLibraryTab(
                             onReadingStatusChange = libraryViewModel::updateReadingStatus,
                             onWishlistStatusChange = libraryViewModel::updateWishlistStatus,
                             onRemoveFromCollection = libraryViewModel::removeBookFromCollection,
+                            onBookClick = { book ->  // AÑADIR ESTE PARÁMETRO
+                                val userBookId = book.userBook?.id ?: return@ExpandableBookSection
+                                onNavigateToBookDetail(userBookId, book.book.id)
+                            },
                             showReadingStatusButton = false,
                             backgroundColor = Color(0xFFB8E6B8) // Soft pastel green
                         )

@@ -26,6 +26,7 @@ fun ExpandableBookSection(
     onReadingStatusChange: (Long, UserBookReadingStatus) -> Unit,
     onWishlistStatusChange: (Long, UserBookWishlistStatus) -> Unit,
     onRemoveFromCollection: (Long) -> Unit,
+    onBookClick: (BookWithUserDataExtended) -> Unit = {},
     showReadingStatusButton: Boolean = true,
     backgroundColor: Color = Color.Unspecified,
     modifier: Modifier = Modifier
@@ -123,6 +124,9 @@ fun ExpandableBookSection(
                             },
                             onRemoveFromCollection = {
                                 onRemoveFromCollection(bookWithUserData.book.id)
+                            },
+                            onBookClick = {
+                                onBookClick(bookWithUserData)
                             },
                             showReadingStatusButton = showReadingStatusButton
                         )

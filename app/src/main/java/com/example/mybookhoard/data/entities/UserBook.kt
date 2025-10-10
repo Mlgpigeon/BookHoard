@@ -42,7 +42,7 @@ data class UserBook(
     val wishlistStatus: UserBookWishlistStatus? = null,
 
     @ColumnInfo(name = "personal_rating")
-    val personalRating: Int? = null, // 1-5 stars
+    val personalRating: Float? = null, // 0.0-10.0 with 1 decimal
 
     @ColumnInfo(name = "review")
     val review: String? = null,

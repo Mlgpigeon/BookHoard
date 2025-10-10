@@ -119,7 +119,7 @@ class UserBookRepository private constructor(context: Context) {
         userId: Long,
         bookId: Long,
         dateFinished: Date = Date(),
-        rating: Int? = null
+        rating: Float? = null
     ) = withContext(Dispatchers.IO) {
         val existingUserBook = userBookDao.getUserBookSync(userId, bookId)
         val userBook = existingUserBook?.copy(

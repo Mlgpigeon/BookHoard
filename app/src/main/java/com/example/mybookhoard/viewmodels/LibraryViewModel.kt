@@ -281,6 +281,31 @@ class LibraryViewModel(
         }
     }
 
+    fun updatePersonalRating(userBookId: Long, newRating: Float?) {
+        viewModelScope.launch {
+            try {
+                Log.d(TAG, "updatePersonalRating - userBookId=$userBookId, rating=$newRating")
+
+                // Call the API
+                val result = userBooksApiService.updatePersonalRating(
+                    userBookId = userBookId,
+                    newRating = newRating
+                )
+
+                if (result is UserBookResult.Success) {
+                    Log.d(TAG, "updatePersonalRating success for userBookId=$userBookId")
+                    loadLibraryData()
+                } else {
+                    _error.value = "Failed to update rating"
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "updatePersonalRating exception", e)
+                _error.value = "Failed to update rating: ${e.message}"
+            }
+        }
+    }
+
+
     fun removeBookFromCollection(bookId: Long) {
         viewModelScope.launch {
             try {

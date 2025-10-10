@@ -183,7 +183,10 @@ class MainActivity : ComponentActivity() {
                             ) { paddingValues ->
                                 Box(modifier = androidx.compose.ui.Modifier.padding(paddingValues)) {
                                     LibraryScreen(
-                                        libraryViewModel = libraryVm
+                                        libraryViewModel = libraryVm,
+                                        onNavigateToBookDetail = { userBookId, bookId ->  // AÑADIR CALLBACK
+                                            nav.navigate("book_detail/$userBookId/$bookId")
+                                        }
                                     )
                                 }
                             }

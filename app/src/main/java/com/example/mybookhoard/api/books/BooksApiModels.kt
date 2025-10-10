@@ -61,7 +61,7 @@ object UserBookParser {
                 "obtained" -> UserBookWishlistStatus.OBTAINED
                 else -> null
             },
-            personalRating = json.optInt("personal_rating").takeIf { it != 0 },
+            personalRating = json.optDouble("personal_rating", 0.0).takeIf { it != 0.0 }?.toFloat(),
             review = json.optString("review").takeIf { it.isNotBlank() },
             annotations = json.optString("annotations").takeIf { it.isNotBlank() },
             readingProgress = json.optInt("reading_progress", 0),

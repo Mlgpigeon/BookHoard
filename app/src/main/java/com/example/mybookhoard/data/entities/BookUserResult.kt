@@ -36,7 +36,7 @@ data class BookUserResult(
     @ColumnInfo(name = "ub_user_id") val userId: Long?,
     @ColumnInfo(name = "ub_reading_status") val readingStatus: UserBookReadingStatus?,
     @ColumnInfo(name = "ub_wishlist_status") val wishlistStatus: UserBookWishlistStatus?,
-    @ColumnInfo(name = "ub_personal_rating") val personalRating: Int?,
+    @ColumnInfo(name = "ub_personal_rating") val personalRating: Float?,
     @ColumnInfo(name = "ub_review") val review: String?,
     @ColumnInfo(name = "ub_annotations") val annotations: String?,
     @ColumnInfo(name = "ub_reading_progress") val readingProgress: Int?,

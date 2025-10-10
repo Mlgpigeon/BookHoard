@@ -21,6 +21,7 @@ fun LibraryBookCard(
     onReadingStatusChange: (UserBookReadingStatus) -> Unit,
     onWishlistStatusChange: (UserBookWishlistStatus) -> Unit,
     onRemoveFromCollection: () -> Unit,
+    onBookClick: () -> Unit = {},
     modifier: Modifier = Modifier,
     showReadingStatusButton: Boolean = true
 ) {
@@ -33,15 +34,34 @@ fun LibraryBookCard(
 
     Card(
         modifier = modifier.fillMaxWidth(),
-        onClick = {
-            // Future: Navigate to book details
-        }
+        onClick = onBookClick
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(16.dp)
         ) {
+            userBook?.personalRating?.let { rating ->
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Star,
+                        contentDescription = "Rating",
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Text(
+                        text = String.format("%.1f/10", rating),
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Medium,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
+                Spacer(modifier = Modifier.height(8.dp))
+            }
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,

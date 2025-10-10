@@ -16,6 +16,7 @@ import com.example.mybookhoard.viewmodels.LibraryViewModel
 @Composable
 fun LibraryScreen(
     libraryViewModel: LibraryViewModel,
+    onNavigateToBookDetail: (Long, Long) -> Unit = { _, _ -> },  // NUEVO
     modifier: Modifier = Modifier
 ) {
     val pagerState = rememberPagerState(pageCount = { 2 })
@@ -93,6 +94,7 @@ fun LibraryScreen(
             when (page) {
                 0 -> MyLibraryTab(
                     libraryViewModel = libraryViewModel,
+                    onNavigateToBookDetail = onNavigateToBookDetail,
                     modifier = Modifier.fillMaxSize()
                 )
                 1 -> MyWishlistTab(

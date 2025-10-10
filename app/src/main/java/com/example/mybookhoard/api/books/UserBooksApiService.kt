@@ -86,6 +86,42 @@ class UserBooksApiService(
             UserBookResult.Error(e.message ?: "Unknown error")
         }
     }
+    suspend fun updatePersonalRating(
+        userBookId: Long,
+        newRating: Float?
+    ): UserBookResult {
+        return try {
+            val payload = JSONObject().apply {
+                put("personal_rating", newRating ?: JSONObject.NULL)
+            }
+
+            val response = apiClient.makeAuthenticatedRequest(
+                "user_books/$userBookId",
+                "PUT",
+                payload
+            )
+
+            if (response.isSuccessful()) {
+                val root = JSONObject(response.body)
+                val data = if (root.has("data")) root.get("data") else root
+                val obj = when (data) {
+                    is JSONObject -> data
+                    is JSONArray -> if (data.length() > 0) data.getJSONObject(0) else JSONObject()
+                    else -> JSONObject()
+                }
+
+                val bookId = obj.optLong("book_id")
+                val userId = obj.optLong("user_id")
+                val parsed = UserBookParser.parseUserBookFromJson(obj, bookId, userId)
+                UserBookResult.Success(parsed)
+            } else {
+                UserBookResult.Error("HTTP ${response.code}: ${apiClient.extractErrorMessage(response.body)}")
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "updatePersonalRating - exception", e)
+            UserBookResult.Error(e.message ?: "Unknown error")
+        }
+    }
 
     /**
      * Add book to user's collection via API
