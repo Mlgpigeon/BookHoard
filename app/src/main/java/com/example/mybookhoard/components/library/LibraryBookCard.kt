@@ -15,10 +15,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip  // ✅ NUEVO
 import androidx.compose.ui.layout.ContentScale  // ✅ NUEVO
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage  // ✅ NUEVO
+import coil.request.CachePolicy
+import coil.request.ImageRequest
 import com.example.mybookhoard.data.entities.*
 import com.example.mybookhoard.components.dialogs.RemoveBookDialog
 import com.example.mybookhoard.components.dialogs.WishlistSelectionDialog
@@ -85,7 +88,13 @@ fun LibraryBookCard(
                 // ============================================================================
                 if (!book.coverSelected.isNullOrBlank()) {
                     AsyncImage(
-                        model = book.coverSelected,
+                        model = ImageRequest.Builder(LocalContext.current)
+                            .data(book.coverSelected)
+                            .crossfade(true)
+                            .size(120, 180) // Tamaño específico para optimizar memoria
+                            .memoryCachePolicy(CachePolicy.ENABLED)
+                            .diskCachePolicy(CachePolicy.ENABLED)
+                            .build(),
                         contentDescription = "Cover of ${book.title}",
                         modifier = Modifier
                             .width(60.dp)
