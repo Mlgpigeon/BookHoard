@@ -34,6 +34,11 @@
             </intent-filter>
         </activity>
 
+        <activity
+            android:name="com.yalantis.ucrop.UCropActivity"
+            android:screenOrientation="portrait"
+            android:theme="@style/UCropTheme" />
+
         <!-- FileProvider para compartir archivos de cámara de forma segura -->
         <provider
             android:name="androidx.core.content.FileProvider"

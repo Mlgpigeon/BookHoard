@@ -83,6 +83,7 @@ dependencies {
 
     implementation("io.coil-kt:coil-compose:2.5.0")
     implementation("com.github.yalantis:ucrop:2.2.8")
+    implementation("androidx.appcompat:appcompat:1.6.1")
 
     // Google Sign-In & Drive API
     implementation("com.google.android.gms:play-services-auth:21.0.0")

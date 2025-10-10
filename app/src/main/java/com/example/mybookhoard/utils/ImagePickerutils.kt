@@ -15,6 +15,7 @@ import androidx.compose.runtime.*
 import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
 import com.yalantis.ucrop.UCrop
+import com.yalantis.ucrop.UCropActivity
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.*
@@ -168,16 +169,34 @@ class ImagePickerState(
             val destinationUri = ImagePickerUtils.createCroppedImageUri(context)
 
             val options = UCrop.Options().apply {
+                // Quality and compression
                 setCompressionQuality(90)
+                setCompressionFormat(android.graphics.Bitmap.CompressFormat.JPEG)
+
+                // UI customization
                 setHideBottomControls(false)
                 setFreeStyleCropEnabled(true)
                 setShowCropFrame(true)
                 setShowCropGrid(true)
+
+                // Color customization - Dark theme to avoid status bar issues
+                setToolbarColor(android.graphics.Color.parseColor("#000000"))
+                setStatusBarColor(android.graphics.Color.parseColor("#000000"))
+                setToolbarWidgetColor(android.graphics.Color.WHITE)
+                setActiveControlsWidgetColor(android.graphics.Color.parseColor("#6200EE"))
+                setRootViewBackgroundColor(android.graphics.Color.parseColor("#000000"))
+
+                // Allow gestures
+                setAllowedGestures(
+                    UCropActivity.SCALE, // Scale on first tab
+                    UCropActivity.ROTATE, // Rotate on second tab
+                    UCropActivity.ALL // All gestures on third tab
+                )
             }
 
             val uCropIntent = UCrop.of(sourceUri, destinationUri)
-                .withAspectRatio(2f, 3f)
-                .withMaxResultSize(2000, 3000)
+                .withAspectRatio(2f, 3f) // Book cover ratio
+                .withMaxResultSize(2000, 3000) // Max resolution
                 .withOptions(options)
                 .getIntent(context)
 
@@ -186,7 +205,6 @@ class ImagePickerState(
             android.util.Log.e("ImagePickerState", "Error launching crop", e)
         }
     }
-
     /**
      * Handle crop activity result
      */
