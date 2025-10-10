@@ -22,9 +22,10 @@ import com.example.mybookhoard.components.dialogs.WishlistSelectionDialog
 fun BookSearchCard(
     book: Book,
     userBook: UserBook?,
-    authorName: String? = null, // For API books that come with author name
+    authorName: String? = null,
     onAddToCollection: (UserBookWishlistStatus) -> Unit,
     onRemoveFromCollection: () -> Unit,
+    onNavigateToDetail: (Long) -> Unit,
     modifier: Modifier = Modifier
 ) {
     var showWishlistDialog by remember { mutableStateOf(false) }
@@ -35,7 +36,7 @@ fun BookSearchCard(
     Card(
         modifier = modifier.fillMaxWidth(),
         onClick = {
-            // Future: Navigate to book details
+            onNavigateToDetail(book.id)
         }
     ) {
         Column(

@@ -21,7 +21,8 @@ import com.example.mybookhoard.viewmodels.SearchViewModel
 @Composable
 fun SearchScreen(
     searchViewModel: SearchViewModel = viewModel(),
-    onAddBookClick: () -> Unit = {}
+    onAddBookClick: () -> Unit = {},
+    onNavigateToBookDetail: (Long) -> Unit = {}
 ) {
     val uiState by searchViewModel.uiState.collectAsState()
     val searchQuery by searchViewModel.searchQuery.collectAsState()
@@ -104,6 +105,9 @@ fun SearchScreen(
                                 },
                                 onRemoveFromCollection = {
                                     searchViewModel.removeBookFromCollection(bookWithUserData.book.id)
+                                },
+                                onNavigateToDetail = { bookId ->  // ✅ AÑADIR NAVEGACIÓN
+                                    onNavigateToBookDetail(bookId)
                                 }
                             )
                         }

@@ -345,52 +345,32 @@ class MainActivity : ComponentActivity() {
                         val libraryVm: LibraryViewModel = viewModel(factory = libraryFactory)
                         val user = (authState as? AuthState.Authenticated)?.user
 
-                        if (user != null && userBookId != -1L && bookId != -1L) {
-                            // Collect all books and find the one we need
-                            val allBooks = remember { mutableStateOf<BookWithUserDataExtended?>(null) }
+                        if (user != null) {
+                            val readBooks by libraryVm.readBooks.collectAsState()
+                            val readingBooks by libraryVm.readingBooks.collectAsState()
+                            val notStartedBooks by libraryVm.notStartedBooks.collectAsState()
 
-                            LaunchedEffect(userBookId, bookId) {
-                                launch {
-                                    libraryVm.readBooks.collect { readBooks ->
-                                        if (allBooks.value == null) {
-                                            readBooks.find {
-                                                it.userBook?.id == userBookId && it.book.id == bookId
-                                            }?.let { allBooks.value = it }
-                                        }
-                                    }
+                            val bookWithUserData =
+                                remember(readBooks, readingBooks, notStartedBooks, bookId) {
+                                    readBooks.find { it.book.id == bookId }
+                                        ?: readingBooks.find { it.book.id == bookId }
+                                        ?: notStartedBooks.find { it.book.id == bookId }
                                 }
-                                launch {
-                                    libraryVm.readingBooks.collect { readingBooks ->
-                                        if (allBooks.value == null) {
-                                            readingBooks.find {
-                                                it.userBook?.id == userBookId && it.book.id == bookId
-                                            }?.let { allBooks.value = it }
-                                        }
-                                    }
-                                }
-                                launch {
-                                    libraryVm.notStartedBooks.collect { notStartedBooks ->
-                                        if (allBooks.value == null) {
-                                            notStartedBooks.find {
-                                                it.userBook?.id == userBookId && it.book.id == bookId
-                                            }?.let { allBooks.value = it }
-                                        }
-                                    }
-                                }
-                            }
 
-                            allBooks.value?.let { bookWithUserData ->
+                            if (bookWithUserData != null) {
                                 BookDetailScreen(
                                     bookWithUserData = bookWithUserData,
                                     onNavigateBack = { nav.navigateUp() },
-                                    onRatingChange = { newRating ->
-                                        bookWithUserData.userBook?.id?.let { ubId ->
-                                            libraryVm.updatePersonalRating(ubId, newRating)
-                                        }
+                                    onRatingChange = { userBookId, rating ->  // ✅ Ahora recibe userBookId
+                                        libraryVm.updatePersonalRating(userBookId, rating)
+                                    },
+                                    onRemoveFromCollection = {
+                                        libraryVm.removeBookFromCollection(bookId)
+                                        nav.navigateUp()
                                     }
+                                    // onAddToCollection es null porque ya está en la colección
                                 )
-                            } ?: run {
-                                // Show loading while we search for the book
+                            } else {
                                 Box(
                                     modifier = androidx.compose.ui.Modifier.fillMaxSize(),
                                     contentAlignment = Alignment.Center
