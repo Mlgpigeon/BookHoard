@@ -7,6 +7,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -30,9 +31,10 @@ import com.example.mybookhoard.data.entities.UserBookWishlistStatus
 fun BookDetailScreen(
     bookWithUserData: BookWithUserDataExtended,
     onNavigateBack: () -> Unit,
-    onRatingChange: ((userBookId: Long, Float?) -> Unit)? = null,  // ✅ Ahora opcional y con userBookId
-    onAddToCollection: ((UserBookWishlistStatus) -> Unit)? = null,  // ✅ NUEVO
-    onRemoveFromCollection: (() -> Unit)? = null,  // ✅ NUEVO
+    onRatingChange: ((userBookId: Long, Float?) -> Unit)? = null,
+    onAddToCollection: ((UserBookWishlistStatus) -> Unit)? = null,
+    onRemoveFromCollection: (() -> Unit)? = null,
+    onEditBook: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val scrollState = rememberScrollState()
@@ -52,6 +54,14 @@ fun BookDetailScreen(
                         Icon(
                             imageVector = Icons.Default.ArrowBack,
                             contentDescription = "Back"
+                        )
+                    }
+                },
+                actions = {
+                    IconButton(onClick = onEditBook) {
+                        Icon(
+                            imageVector = Icons.Default.Edit,
+                            contentDescription = "Edit book"
                         )
                     }
                 }

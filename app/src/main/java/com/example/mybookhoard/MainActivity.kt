@@ -47,6 +47,7 @@ import com.example.mybookhoard.screens.SearchScreen
 import com.example.mybookhoard.screens.LibraryScreen
 import com.example.mybookhoard.screens.AddBookScreen
 import com.example.mybookhoard.screens.BookDetailScreen
+import com.example.mybookhoard.screens.EditBookScreen
 import com.example.mybookhoard.screens.SagaEditorScreen
 import com.example.mybookhoard.screens.SagasManagementScreen
 import com.example.mybookhoard.viewmodels.AuthViewModel
@@ -371,8 +372,8 @@ class MainActivity : ComponentActivity() {
                                     onRemoveFromCollection = {
                                         libraryVm.removeBookFromCollection(bookId)
                                         nav.navigateUp()
-                                    }
-                                    // onAddToCollection es null porque ya está en la colección
+                                    },
+                                    onEditBook = { nav.navigate("edit_book/$bookId") }
                                 )
                             } else {
                                 Box(
@@ -386,6 +387,34 @@ class MainActivity : ComponentActivity() {
                                     )
                                 }
                             }
+                        }
+                    }
+                    composable(
+                        route = "edit_book/{bookId}",
+                        arguments = listOf(navArgument("bookId") { type = NavType.LongType })
+                    ) { backStackEntry ->
+                        val bookId = backStackEntry.arguments?.getLong("bookId") ?: return@composable
+
+                        val libraryVm: LibraryViewModel = viewModel(factory = libraryFactory)
+                        val readBooks by libraryVm.readBooks.collectAsState()
+                        val readingBooks by libraryVm.readingBooks.collectAsState()
+                        val notStartedBooks by libraryVm.notStartedBooks.collectAsState()
+
+                        val bookWithUserData = remember(readBooks, readingBooks, notStartedBooks, bookId) {
+                            readBooks.find { it.book.id == bookId }
+                                ?: readingBooks.find { it.book.id == bookId }
+                                ?: notStartedBooks.find { it.book.id == bookId }
+                        }
+
+                        if (bookWithUserData != null) {
+                            EditBookScreen(
+                                bookWithUserData = bookWithUserData,
+                                onNavigateBack = { nav.popBackStack() },
+                                onSaveBook = { title, description, images, coverSelected ->
+                                    // TODO: Implement API save
+                                    nav.popBackStack()
+                                }
+                            )
                         }
                     }
                 }
