@@ -27,10 +27,11 @@ class Converters {
 
     // UserBook enum converters
     @TypeConverter
-    fun fromUserBookReadingStatus(status: UserBookReadingStatus): String = status.name
+    fun fromUserBookReadingStatus(status: UserBookReadingStatus?): String? = status?.name
 
     @TypeConverter
-    fun toUserBookReadingStatus(status: String): UserBookReadingStatus = enumValueOf(status)
+    fun toUserBookReadingStatus(status: String?): UserBookReadingStatus? =
+        status?.let { enumValueOf<UserBookReadingStatus>(it) }
 
     @TypeConverter
     fun fromUserBookWishlistStatus(status: UserBookWishlistStatus?): String? = status?.name
@@ -38,6 +39,7 @@ class Converters {
     @TypeConverter
     fun toUserBookWishlistStatus(status: String?): UserBookWishlistStatus? =
         status?.let { enumValueOf<UserBookWishlistStatus>(it) }
+
 
     // List<String> converters for JSON arrays (genres, images, adaptations)
     @TypeConverter

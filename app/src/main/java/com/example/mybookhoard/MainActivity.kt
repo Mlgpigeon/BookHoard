@@ -39,6 +39,7 @@ import com.example.mybookhoard.repositories.UserBookRepository
 import com.example.mybookhoard.repositories.BookRepository
 import com.example.mybookhoard.data.auth.UserPreferences
 import com.example.mybookhoard.data.entities.BookWithUserDataExtended
+import com.example.mybookhoard.repositories.AuthorRepository
 import com.example.mybookhoard.screens.AuthScreen
 import com.example.mybookhoard.screens.ProfileScreen
 import com.example.mybookhoard.screens.SearchScreen
@@ -96,6 +97,7 @@ class MainActivity : ComponentActivity() {
                 return LibraryViewModel(
                     userBookRepository = userBookRepository,
                     bookRepository = bookRepository,
+                    authorRepository = AuthorRepository.getInstance(this@MainActivity), // NUEVO
                     userId = getCurrentUserId(),
                     userBooksApiService = userBooksApiService
                 ) as T

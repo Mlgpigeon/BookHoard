@@ -12,6 +12,7 @@ import kotlinx.coroutines.launch
 import com.example.mybookhoard.repositories.UserBookRepository
 import com.example.mybookhoard.repositories.BookRepository
 import com.example.mybookhoard.data.entities.*
+import com.example.mybookhoard.repositories.AuthorRepository
 import com.example.mybookhoard.utils.BookSorting
 import kotlinx.coroutines.FlowPreview
 import com.example.mybookhoard.utils.FuzzySearchUtils
@@ -20,6 +21,7 @@ import com.example.mybookhoard.utils.FuzzySearchUtils
 class LibraryViewModel(
     private val userBookRepository: UserBookRepository,
     private val bookRepository: BookRepository,
+    private val authorRepository: AuthorRepository,  // NUEVO
     private val userId: Long,
     private val userBooksApiService: UserBooksApiService,
 ) : ViewModel() {
@@ -117,7 +119,110 @@ class LibraryViewModel(
     )
 
     init {
-        loadLibraryData()
+        loadLibraryDataFromLocal()
+    }
+
+    private fun loadLibraryDataFromLocal() {
+        viewModelScope.launch {
+            _isLoading.value = true
+            try {
+                // Load from local database first
+                userBookRepository.getBooksWithUserDataExtended(userId).collect { booksWithUserData ->
+                    val obtainedBooks = booksWithUserData.filter {
+                        it.userBook?.wishlistStatus == UserBookWishlistStatus.OBTAINED
+                    }
+
+                    _baseReadBooks.value = BookSorting.sortBySaga(
+                        obtainedBooks.filter {
+                            it.userBook?.readingStatus == UserBookReadingStatus.READ
+                        }
+                    )
+
+                    _baseReadingBooks.value = BookSorting.sortBySaga(
+                        obtainedBooks.filter {
+                            it.userBook?.readingStatus == UserBookReadingStatus.READING
+                        }
+                    )
+
+                    _baseNotStartedBooks.value = BookSorting.sortBySaga(
+                        obtainedBooks.filter {
+                            it.userBook?.readingStatus == UserBookReadingStatus.NOT_STARTED ||
+                                    it.userBook?.readingStatus == null
+                        }
+                    )
+
+                    _baseWishlistBooks.value = BookSorting.sortBySaga(
+                        booksWithUserData.filter {
+                            it.userBook?.wishlistStatus == UserBookWishlistStatus.WISH
+                        }
+                    )
+
+                    _baseOnTheWayBooks.value = BookSorting.sortBySaga(
+                        booksWithUserData.filter {
+                            it.userBook?.wishlistStatus == UserBookWishlistStatus.ON_THE_WAY
+                        }
+                    )
+
+                    _libraryStats.value = LibraryStats(
+                        totalBooks = obtainedBooks.size,
+                        readBooks = _baseReadBooks.value.size,
+                        readingBooks = _baseReadingBooks.value.size,
+                        notStartedBooks = _baseNotStartedBooks.value.size
+                    )
+
+                    Log.d(TAG, "Library data loaded from local - Total: ${obtainedBooks.size}")
+                    _isLoading.value = false
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Exception loading library data from local", e)
+                _error.value = "Failed to load library: ${e.message}"
+                _isLoading.value = false
+            }
+        }
+    }
+
+    private suspend fun syncLibraryData() {
+        try {
+            // Fetch from API
+            when (val result = userBooksApiService.getUserBooksWithDetails(userId)) {
+                is LibraryResult.Success -> {
+                    Log.d(TAG, "Syncing ${result.items.size} items from API")
+
+                    // PASO 1: Guardar autores PRIMERO (antes de los libros)
+                    val authors = result.items.mapNotNull { item ->
+                        item.authorName?.let { name ->
+                            item.book.primaryAuthorId?.let { id ->
+                                Author(id = id, name = name)
+                            }
+                        }
+                    }
+                    if (authors.isNotEmpty()) {
+                        Log.d(TAG, "Saving ${authors.size} authors")
+                        authorRepository.addAuthors(authors)
+                    }
+
+                    // PASO 2: Guardar libros (ahora los autores ya existen)
+                    val books = result.items.map { it.book }
+                    Log.d(TAG, "Saving ${books.size} books")
+                    bookRepository.addBooks(books)
+
+                    // PASO 3: Guardar user books (ahora los libros ya existen)
+                    val userBooks = result.items.map { it.userBook }
+                    Log.d(TAG, "Saving ${userBooks.size} user books")
+                    userBookRepository.addUserBooks(userBooks)
+
+                    Log.d(TAG, "Library data synced successfully")
+                }
+
+                is LibraryResult.Error -> {
+                    Log.e(TAG, "Error syncing library data: ${result.message}")
+                    _error.value = "Failed to sync library: ${result.message}"
+                }
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Exception syncing library data", e)
+            _error.value = "Failed to sync library: ${e.message}"
+        }
     }
 
     fun loadLibraryData() {
@@ -214,7 +319,7 @@ class LibraryViewModel(
         viewModelScope.launch {
             _isRefreshing.value = true
             try {
-                loadLibraryData()
+                syncLibraryData()
             } finally {
                 _isRefreshing.value = false
             }

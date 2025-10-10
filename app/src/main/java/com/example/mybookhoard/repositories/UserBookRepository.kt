@@ -52,6 +52,11 @@ class UserBookRepository private constructor(context: Context) {
             resultList.map { it.toBookWithUserData() }
         }
 
+    fun getBooksWithUserDataExtended(userId: Long): Flow<List<BookWithUserDataExtended>> =
+        userBookDao.getBooksWithUserDataRaw(userId).map { resultList ->
+            resultList.map { it.toBookWithUserDataExtended() }
+        }
+
     // Write operations
     suspend fun addUserBook(userBook: UserBook): Long = withContext(Dispatchers.IO) {
         userBookDao.upsert(userBook.copy(updatedAt = Date()))

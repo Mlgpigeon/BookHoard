@@ -44,7 +44,11 @@ data class BookUserResult(
     @ColumnInfo(name = "ub_date_finished") val dateFinished: Date?,
     @ColumnInfo(name = "ub_favorite") val favorite: Boolean?,
     @ColumnInfo(name = "ub_created_at") val userBookCreatedAt: Date?,
-    @ColumnInfo(name = "ub_updated_at") val userBookUpdatedAt: Date?
+    @ColumnInfo(name = "ub_updated_at") val userBookUpdatedAt: Date?,
+
+    // Extended fields - Author and Saga info
+    @ColumnInfo(name = "author_name") val authorName: String?,
+    @ColumnInfo(name = "saga_name") val sagaName: String?
 ) {
     /**
      * Converts this flat result to BookWithUserData
@@ -93,5 +97,64 @@ data class BookUserResult(
         } else null
 
         return BookWithUserData(book, userBook)
+    }
+
+    /**
+     * Converts this flat result to BookWithUserDataExtended including author and saga names
+     */
+    fun toBookWithUserDataExtended(): BookWithUserDataExtended {
+        val book = Book(
+            id = bookId,
+            title = title,
+            originalTitle = originalTitle,
+            description = description,
+            primaryAuthorId = primaryAuthorId,
+            sagaId = sagaId,
+            sagaNumber = sagaNumber,
+            language = language,
+            publicationYear = publicationYear,
+            genres = genres,
+            isbn = isbn,
+            coverSelected = coverSelected,
+            images = images,
+            adaptations = adaptations,
+            averageRating = averageRating,
+            totalRatings = totalRatings,
+            isPublic = isPublic,
+            source = source,
+            createdAt = bookCreatedAt,
+            updatedAt = bookUpdatedAt
+        )
+
+        val userBook = if (userBookId != null && userId != null) {
+            UserBook(
+                id = userBookId,
+                userId = userId,
+                bookId = bookId,
+                readingStatus = readingStatus ?: UserBookReadingStatus.NOT_STARTED,
+                wishlistStatus = wishlistStatus,
+                personalRating = personalRating,
+                review = review,
+                annotations = annotations,
+                readingProgress = readingProgress ?: 0,
+                dateStarted = dateStarted,
+                dateFinished = dateFinished,
+                favorite = favorite ?: false,
+                createdAt = userBookCreatedAt ?: Date(),
+                updatedAt = userBookUpdatedAt ?: Date()
+            )
+        } else null
+
+        return BookWithUserDataExtended(
+            book = book,
+            userBook = userBook,
+            authorName = authorName,
+            sagaName = sagaName,
+            sourceLabel = when (source.name) {
+                "GOOGLE_BOOKS_API" -> "from Google Books"
+                "OPENLIBRARY_API" -> "from Open Library"
+                else -> null
+            }
+        )
     }
 }
