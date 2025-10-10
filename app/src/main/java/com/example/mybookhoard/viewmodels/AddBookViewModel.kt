@@ -4,6 +4,7 @@ import android.net.Uri
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.mybookhoard.api.ImageUploadService
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.Job
@@ -20,7 +21,8 @@ import com.example.mybookhoard.data.entities.UserBookWishlistStatus
 
 class AddBookViewModel(
     private val booksCreationApiService: BooksCreationApiService,
-    private val userBooksApiService: UserBooksApiService
+    private val userBooksApiService: UserBooksApiService,
+    private val imageUploadService: ImageUploadService
 ) : ViewModel() {
 
     companion object {
@@ -199,6 +201,21 @@ class AddBookViewModel(
                 val sagaName = currentForm.saga.takeIf { it.isNotBlank() }
 
                 Log.d(TAG, "Creating book with saga: name=$sagaName, id=$sagaId, number=$parsedSagaNumber")
+                var imageUrl: String? = null
+                val imageUri = _selectedImageUri.value
+                if (imageUri != null) {
+                    Log.d(TAG, "Uploading book cover image...")
+                    when (val uploadResult = imageUploadService.uploadBookCover(imageUri)) {
+                        is ImageUploadService.ImageUploadResult.Success -> {
+                            imageUrl = uploadResult.url
+                            Log.d(TAG, "Image uploaded successfully: $imageUrl")
+                        }
+                        is ImageUploadService.ImageUploadResult.Error -> {
+                            Log.w(TAG, "Image upload failed: ${uploadResult.message}")
+                            // Continue without image
+                        }
+                    }
+                }
 
                 // Step 1: Create the book
                 val result = booksCreationApiService.createBook(
@@ -210,7 +227,8 @@ class AddBookViewModel(
                     isbn = currentForm.isbn.takeIf { it.isNotBlank() },
                     sagaId = sagaId,
                     sagaName = sagaName,
-                    sagaNumber = parsedSagaNumber
+                    sagaNumber = parsedSagaNumber,
+                    coverImageUrl = imageUrl
                 )
 
                 when (result) {

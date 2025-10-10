@@ -3,6 +3,7 @@ package com.example.mybookhoard.api.books
 import android.content.Context
 import android.util.Log
 import com.example.mybookhoard.api.auth.AuthApi
+import org.json.JSONArray
 import org.json.JSONObject
 
 /**
@@ -189,7 +190,8 @@ class BooksCreationApiService(
         isbn: String? = null,
         sagaId: Long? = null,
         sagaName: String? = null,
-        sagaNumber: Int? = null
+        sagaNumber: Int? = null,
+        coverImageUrl: String? = null
     ): BookCreationResult {
         try {
             Log.d(TAG, "Creating book: title='$title', author='$authorName', saga='$sagaName', sagaId=$sagaId, sagaNumber=$sagaNumber")
@@ -222,6 +224,13 @@ class BooksCreationApiService(
                 sagaId?.let { put("saga_id", it) }
                 sagaName?.let { if (it.isNotBlank()) put("saga_name", it.trim()) }
                 sagaNumber?.let { put("saga_number", it) }
+
+                // Image URL
+                coverImageUrl?.let {
+                    val imagesArray = JSONArray().apply { put(it) }
+                    put("images", imagesArray)
+                    put("cover_selected", it)
+                }
 
                 put("is_public", true)
                 put("source", "user_defined")

@@ -26,6 +26,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import com.example.mybookhoard.api.ImageUploadService
 import com.example.mybookhoard.api.auth.AuthApi
 import com.example.mybookhoard.api.auth.AuthState
 import com.example.mybookhoard.api.books.BooksApiService
@@ -68,6 +69,7 @@ class MainActivity : ComponentActivity() {
         val userBooksApiService = UserBooksApiService(applicationContext, authApi)
         val booksCreationApiService = BooksCreationApiService(applicationContext, authApi)
         val sagasApiService = SagasApiService(applicationContext, authApi)
+        val imageUploadService = ImageUploadService(applicationContext, authApi)
 
         // Initialize repositories
         val userBookRepository = UserBookRepository.getInstance(this)
@@ -109,7 +111,8 @@ class MainActivity : ComponentActivity() {
                 @Suppress("UNCHECKED_CAST")
                 return AddBookViewModel(
                     booksCreationApiService = booksCreationApiService,
-                    userBooksApiService = userBooksApiService  // NUEVA DEPENDENCIA
+                    userBooksApiService = userBooksApiService,
+                    imageUploadService = imageUploadService
                 ) as T
             }
         }
