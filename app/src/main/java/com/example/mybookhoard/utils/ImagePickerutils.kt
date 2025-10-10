@@ -1,16 +1,20 @@
 package com.example.mybookhoard.utils
 
 import android.Manifest
+import android.app.Activity
 import android.content.Context
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import androidx.activity.compose.ManagedActivityResultLauncher
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.ActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.*
 import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
+import com.yalantis.ucrop.UCrop
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.*
@@ -71,6 +75,14 @@ object ImagePickerUtils {
     }
 
     /**
+     * Create destination URI for cropped image
+     */
+    fun createCroppedImageUri(context: Context): Uri {
+        val file = createImageFile(context)
+        return getUriForFile(context, file)
+    }
+
+    /**
      * Compress and prepare image for upload
      */
     fun prepareImageForUpload(context: Context, uri: Uri): ByteArray? {
@@ -85,7 +97,7 @@ object ImagePickerUtils {
 }
 
 /**
- * Composable state holder for image picker
+ * Composable state holder for image picker with cropper
  */
 @Composable
 fun rememberImagePickerState(
@@ -103,29 +115,35 @@ fun rememberImagePickerState(
     val galleryLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.GetContent()
     ) { uri ->
-        uri?.let { state.onImageSelected(it) }
+        uri?.let { state.onImagePickedFromSource(it) }
     }
 
     val cameraLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.TakePicture()
     ) { success ->
         if (success) {
-            state.currentCameraUri?.let { state.onImageSelected(it) }
+            state.currentCameraUri?.let { state.onImagePickedFromSource(it) }
         }
     }
 
-    DisposableEffect(Unit) {
+    val cropLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        state.handleCropResult(result)
+    }
+
+    LaunchedEffect(permissionLauncher, galleryLauncher, cameraLauncher, cropLauncher) {
         state.permissionLauncher = permissionLauncher
         state.galleryLauncher = galleryLauncher
         state.cameraLauncher = cameraLauncher
-        onDispose { }
+        state.cropLauncher = cropLauncher
     }
 
     return state
 }
 
 /**
- * State class for managing image picker operations
+ * State class for managing image picker operations with cropping
  */
 class ImagePickerState(
     private val context: Context,
@@ -134,6 +152,7 @@ class ImagePickerState(
     var permissionLauncher: ManagedActivityResultLauncher<Array<String>, Map<String, Boolean>>? = null
     var galleryLauncher: ManagedActivityResultLauncher<String, Uri?>? = null
     var cameraLauncher: ManagedActivityResultLauncher<Uri, Boolean>? = null
+    var cropLauncher: ManagedActivityResultLauncher<Intent, ActivityResult>? = null
 
     var currentCameraUri: Uri? by mutableStateOf(null)
         private set
@@ -141,13 +160,60 @@ class ImagePickerState(
     var showPermissionDialog by mutableStateOf(false)
         private set
 
-    fun onImageSelected(uri: Uri) {
-        onImageSelectedCallback(uri)
+    /**
+     * Called when image is picked from camera or gallery
+     */
+    fun onImagePickedFromSource(sourceUri: Uri) {
+        try {
+            val destinationUri = ImagePickerUtils.createCroppedImageUri(context)
+
+            val options = UCrop.Options().apply {
+                setCompressionQuality(90)
+                setHideBottomControls(false)
+                setFreeStyleCropEnabled(true)
+                setShowCropFrame(true)
+                setShowCropGrid(true)
+            }
+
+            val uCropIntent = UCrop.of(sourceUri, destinationUri)
+                .withAspectRatio(2f, 3f)
+                .withMaxResultSize(2000, 3000)
+                .withOptions(options)
+                .getIntent(context)
+
+            cropLauncher?.launch(uCropIntent)
+        } catch (e: Exception) {
+            android.util.Log.e("ImagePickerState", "Error launching crop", e)
+        }
+    }
+
+    /**
+     * Handle crop activity result
+     */
+    fun handleCropResult(result: ActivityResult) {
+        when (result.resultCode) {
+            Activity.RESULT_OK -> {
+                result.data?.let { data ->
+                    val resultUri = UCrop.getOutput(data)
+                    resultUri?.let { onImageSelectedCallback(it) }
+                }
+            }
+            UCrop.RESULT_ERROR -> {
+                result.data?.let { data ->
+                    val cropError = UCrop.getError(data)
+                    android.util.Log.e("ImagePickerState", "Crop error", cropError)
+                }
+            }
+        }
     }
 
     fun launchGallery() {
         if (ImagePickerUtils.hasPermissions(context)) {
-            galleryLauncher?.launch("image/*")
+            try {
+                galleryLauncher?.launch("image/*")
+            } catch (e: Exception) {
+                android.util.Log.e("ImagePickerState", "Error launching gallery", e)
+            }
         } else {
             requestPermissions()
         }
@@ -158,7 +224,12 @@ class ImagePickerState(
             try {
                 val photoFile = ImagePickerUtils.createImageFile(context)
                 currentCameraUri = ImagePickerUtils.getUriForFile(context, photoFile)
-                cameraLauncher?.launch(currentCameraUri!!)
+
+                if (cameraLauncher != null) {
+                    cameraLauncher?.launch(currentCameraUri!!)
+                } else {
+                    android.util.Log.e("ImagePickerState", "Camera launcher not initialized")
+                }
             } catch (e: Exception) {
                 android.util.Log.e("ImagePickerState", "Error launching camera", e)
             }

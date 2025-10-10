@@ -241,6 +241,7 @@ fun BookImagePicker(
     }
 
     // Permission denied dialog
+    // Permission denied dialog
     if (imagePickerState.showPermissionDialog) {
         AlertDialog(
             onDismissRequest = { imagePickerState.dismissPermissionDialog() },
@@ -262,4 +263,6 @@ fun BookImagePicker(
             }
         )
     }
+
+
 }
