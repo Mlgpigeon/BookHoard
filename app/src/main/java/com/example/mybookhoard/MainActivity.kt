@@ -4,21 +4,28 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import androidx.navigation.navArgument
 import com.example.mybookhoard.api.auth.AuthApi
 import com.example.mybookhoard.api.auth.AuthState
 import com.example.mybookhoard.api.books.BooksApiService
@@ -31,11 +38,13 @@ import com.example.mybookhoard.repositories.AuthRepository
 import com.example.mybookhoard.repositories.UserBookRepository
 import com.example.mybookhoard.repositories.BookRepository
 import com.example.mybookhoard.data.auth.UserPreferences
+import com.example.mybookhoard.data.entities.BookWithUserDataExtended
 import com.example.mybookhoard.screens.AuthScreen
 import com.example.mybookhoard.screens.ProfileScreen
 import com.example.mybookhoard.screens.SearchScreen
 import com.example.mybookhoard.screens.LibraryScreen
 import com.example.mybookhoard.screens.AddBookScreen
+import com.example.mybookhoard.screens.BookDetailScreen
 import com.example.mybookhoard.screens.SagaEditorScreen
 import com.example.mybookhoard.screens.SagasManagementScreen
 import com.example.mybookhoard.viewmodels.AuthViewModel
@@ -310,6 +319,86 @@ class MainActivity : ComponentActivity() {
                                         user = user,
                                         onLogout = { authVm.logout() },
                                         onNavigateToSagas = { nav.navigate("sagas") }
+                                    )
+                                }
+                            }
+                        }
+                    }
+                    composable(
+                        route = "book_detail/{userBookId}/{bookId}",
+                        arguments = listOf(
+                            navArgument("userBookId") { type = NavType.LongType },
+                            navArgument("bookId") { type = NavType.LongType }
+                        )
+                    ) { backStackEntry ->
+                        val userBookId = backStackEntry.arguments?.getLong("userBookId") ?: -1L
+                        val bookId = backStackEntry.arguments?.getLong("bookId") ?: -1L
+
+                        val libraryVm: LibraryViewModel = viewModel(factory = libraryFactory)
+                        val user = (authState as? AuthState.Authenticated)?.user
+
+                        if (user != null && userBookId != -1L && bookId != -1L) {
+                            // Collect all books and find the one we need
+                            val allBooks = remember { mutableStateOf<BookWithUserDataExtended?>(null) }
+
+                            LaunchedEffect(userBookId, bookId) {
+                                // Try to find the book in the library data
+                                libraryVm.readBooks.collect { readBooks ->
+                                    val found = readBooks.find {
+                                        it.userBook?.id == userBookId && it.book.id == bookId
+                                    }
+                                    if (found != null) {
+                                        allBooks.value = found
+                                    }
+                                }
+                            }
+
+                            LaunchedEffect(userBookId, bookId) {
+                                libraryVm.readingBooks.collect { readingBooks ->
+                                    if (allBooks.value == null) {
+                                        val found = readingBooks.find {
+                                            it.userBook?.id == userBookId && it.book.id == bookId
+                                        }
+                                        if (found != null) {
+                                            allBooks.value = found
+                                        }
+                                    }
+                                }
+                            }
+
+                            LaunchedEffect(userBookId, bookId) {
+                                libraryVm.notStartedBooks.collect { notStartedBooks ->
+                                    if (allBooks.value == null) {
+                                        val found = notStartedBooks.find {
+                                            it.userBook?.id == userBookId && it.book.id == bookId
+                                        }
+                                        if (found != null) {
+                                            allBooks.value = found
+                                        }
+                                    }
+                                }
+                            }
+
+                            allBooks.value?.let { bookWithUserData ->
+                                BookDetailScreen(
+                                    bookWithUserData = bookWithUserData,
+                                    onNavigateBack = { nav.navigateUp() },
+                                    onRatingChange = { newRating ->
+                                        bookWithUserData.userBook?.id?.let { ubId ->
+                                            libraryVm.updatePersonalRating(ubId, newRating)
+                                        }
+                                    }
+                                )
+                            } ?: run {
+                                // Show loading while we search for the book
+                                Box(
+                                    modifier = androidx.compose.ui.Modifier.fillMaxSize(),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    CircularProgressIndicator()
+                                    Text(
+                                        "Loading book details...",
+                                        modifier = androidx.compose.ui.Modifier.padding(top = 64.dp)
                                     )
                                 }
                             }
