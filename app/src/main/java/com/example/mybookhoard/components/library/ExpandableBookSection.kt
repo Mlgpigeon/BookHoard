@@ -31,7 +31,7 @@ fun ExpandableBookSection(
     backgroundColor: Color = Color.Unspecified,
     modifier: Modifier = Modifier
 ) {
-    var isExpanded by remember { mutableStateOf(true) }
+    var isExpanded by remember { mutableStateOf(false) }
 
     Column(modifier = modifier) {
         // Section header

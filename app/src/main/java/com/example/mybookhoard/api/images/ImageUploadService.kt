@@ -109,14 +109,23 @@ class ImageUploadService(
 
             if (responseCode in 200..299) {
                 val json = JSONObject(responseBody)
-                val imageUrl = json.optString("url")
+
+                // Check if response has success flag
+                if (!json.optBoolean("success", false)) {
+                    Log.e(TAG, "API returned success=false")
+                    return@withContext ImageUploadResult.Error("Upload failed: API returned unsuccessful response")
+                }
+
+                // Get data object and extract URL
+                val data = json.optJSONObject("data")
+                val imageUrl = data?.optString("url") ?: ""
 
                 if (imageUrl.isNotBlank()) {
                     Log.d(TAG, "Image uploaded successfully: $imageUrl")
                     ImageUploadResult.Success(imageUrl)
                 } else {
-                    Log.e(TAG, "No URL in response")
-                    ImageUploadResult.Error("Invalid server response")
+                    Log.e(TAG, "No URL in response data")
+                    ImageUploadResult.Error("Invalid server response: missing URL in data")
                 }
             } else {
                 val errorMsg = try {
