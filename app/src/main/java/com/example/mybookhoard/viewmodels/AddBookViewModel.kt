@@ -1,5 +1,6 @@
 package com.example.mybookhoard.viewmodels
 
+import android.net.Uri
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -48,6 +49,9 @@ class AddBookViewModel(
     // Wishlist status selection (NEW)
     private val _selectedWishlistStatus = MutableStateFlow<UserBookWishlistStatus?>(null)
     val selectedWishlistStatus: StateFlow<UserBookWishlistStatus?> = _selectedWishlistStatus.asStateFlow()
+
+    private val _selectedImageUri = MutableStateFlow<Uri?>(null)
+    val selectedImageUri: StateFlow<Uri?> = _selectedImageUri.asStateFlow()
 
     // UI state
     private val _uiState = MutableStateFlow<AddBookUiState>(AddBookUiState.Initial)
@@ -145,6 +149,11 @@ class AddBookViewModel(
     fun updateWishlistStatus(status: UserBookWishlistStatus?) {
         _selectedWishlistStatus.value = status
         Log.d(TAG, "Wishlist status updated to: ${status?.name ?: "none"}")
+    }
+
+    fun updateImageUri(uri: Uri?) {
+        _selectedImageUri.value = uri
+        Log.d(TAG, "Image URI updated: $uri")
     }
 
     private suspend fun loadAuthorSuggestions(query: String) {
@@ -263,6 +272,7 @@ class AddBookViewModel(
         _sagaNumber.value = ""
         _selectedWishlistStatus.value = null
         _uiState.value = AddBookUiState.Initial
+        _selectedImageUri.value = null
     }
 
     fun resetUiState() {

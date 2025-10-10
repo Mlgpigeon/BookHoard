@@ -15,6 +15,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.mybookhoard.components.form.*
 import com.example.mybookhoard.viewmodels.AddBookViewModel
+import com.example.mybookhoard.components.form.BookImagePicker
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -29,6 +30,7 @@ fun AddBookScreen(
     val sagaSuggestions by addBookViewModel.sagaSuggestions.collectAsState()
     val sagaNumber by addBookViewModel.sagaNumber.collectAsState()
     val selectedWishlistStatus by addBookViewModel.selectedWishlistStatus.collectAsState()
+    val selectedImageUri by addBookViewModel.selectedImageUri.collectAsState()
 
     val scrollState = rememberScrollState()
     val snackbarHostState = remember { SnackbarHostState() }
@@ -115,6 +117,15 @@ fun AddBookScreen(
                 onSuggestionClick = { addBookViewModel.selectSagaSuggestion(it) },
                 modifier = Modifier.fillMaxWidth()
             )
+
+            BookImagePicker(
+                selectedImageUri = selectedImageUri,
+                onImageSelected = { uri -> addBookViewModel.updateImageUri(uri) },
+                onImageRemoved = { addBookViewModel.updateImageUri(null) },
+                modifier = Modifier.fillMaxWidth()
+            )
+
+            Spacer(modifier = Modifier.height(8.dp))
 
             BookFormField(
                 value = formState.description,

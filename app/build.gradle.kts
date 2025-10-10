@@ -81,6 +81,8 @@ dependencies {
     implementation(libs.androidx.compose.foundation)
     kapt(libs.androidx.room.compiler)
 
+    implementation("io.coil-kt:coil-compose:2.5.0")
+
     // Google Sign-In & Drive API
     implementation("com.google.android.gms:play-services-auth:21.0.0")
     implementation("com.google.apis:google-api-services-drive:v3-rev20240914-2.0.0")

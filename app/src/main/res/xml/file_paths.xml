@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Cache directory for temporary camera captures -->
+    <cache-path name="book_covers" path="." />
+    
+    <!-- External cache for larger files if needed -->
+    <external-cache-path name="external_book_covers" path="." />
+</paths>
