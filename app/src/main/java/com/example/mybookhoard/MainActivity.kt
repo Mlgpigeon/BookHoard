@@ -161,7 +161,11 @@ class MainActivity : ComponentActivity() {
                                 Box(modifier = androidx.compose.ui.Modifier.padding(paddingValues)) {
                                     SearchScreen(
                                         searchViewModel = searchVm,
-                                        onAddBookClick = { nav.navigate("add_book") }
+                                        onAddBookClick = { nav.navigate("add_book") },
+                                        onNavigateToBookDetail = { bookId ->
+                                            // Navigate using -1 for userBookId since this is a search result
+                                            nav.navigate("book_detail/-1/$bookId")
+                                        }
                                     )
                                 }
                             }
