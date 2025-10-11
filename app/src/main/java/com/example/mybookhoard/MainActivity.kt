@@ -451,8 +451,16 @@ class MainActivity : ComponentActivity() {
                                                                     message = "Book updated successfully",
                                                                     duration = SnackbarDuration.Short
                                                                 )
-                                                                kotlinx.coroutines.delay(500)
+
+                                                                // Refresh and wait for it to complete
                                                                 libraryVm.refresh()
+
+                                                                // Wait until refresh is done by observing isRefreshing
+                                                                while (libraryVm.isRefreshing.value) {
+                                                                    kotlinx.coroutines.delay(100)
+                                                                }
+
+                                                                // Now navigate back with updated data
                                                                 nav.popBackStack()
                                                             }
                                                             is BookCreationResult.Error -> {
