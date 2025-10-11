@@ -16,6 +16,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.example.mybookhoard.components.common.RatingSelector
+import com.example.mybookhoard.components.detail.BookImagesCarousel
 import com.example.mybookhoard.components.dialogs.WishlistSelectionDialog
 import com.example.mybookhoard.components.dialogs.RemoveBookDialog
 import com.example.mybookhoard.data.entities.BookWithUserDataExtended
@@ -72,180 +73,172 @@ fun BookDetailScreen(
             modifier = modifier
                 .fillMaxSize()
                 .padding(paddingValues)
-                .verticalScroll(scrollState)
-                .padding(16.dp),
+                .verticalScroll(scrollState),
             verticalArrangement = Arrangement.spacedBy(24.dp)
         ) {
-            // Book header section
-            Column(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                Text(
-                    text = book.title,
-                    style = MaterialTheme.typography.headlineMedium,
-                    fontWeight = FontWeight.Bold,
-                    textAlign = TextAlign.Center
-                )
+            // ========== NUEVO: Image Carousel ==========
+            BookImagesCarousel(
+                coverImageUrl = book.coverSelected,
+                otherImages = book.images ?: emptyList()
+            )
 
-                // Author info
-                if (!bookWithUserData.authorName.isNullOrBlank()) {
+            // ========== NUEVO: Wrapper con padding ==========
+            Column(
+                modifier = Modifier.padding(horizontal = 16.dp),
+                verticalArrangement = Arrangement.spacedBy(24.dp)
+            ) {
+                // Book header section (MANTENER TODO LO QUE YA EXISTE)
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
                     Text(
-                        text = "by ${bookWithUserData.authorName}",
-                        style = MaterialTheme.typography.titleMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        text = book.title,
+                        style = MaterialTheme.typography.headlineMedium,
+                        fontWeight = FontWeight.Bold,
                         textAlign = TextAlign.Center
                     )
-                }
 
-                // ✅ NUEVO: Badge si está en colección
-                if (isInCollection) {
-                    ElevatedCard(
-                        colors = CardDefaults.elevatedCardColors(
-                            containerColor = MaterialTheme.colorScheme.primaryContainer
-                        )
-                    ) {
+                    if (!bookWithUserData.authorName.isNullOrBlank()) {
                         Text(
-                            text = "In Your Collection",
-                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer
+                            text = "by ${bookWithUserData.authorName}",
+                            style = MaterialTheme.typography.titleMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            textAlign = TextAlign.Center
                         )
                     }
-                }
-            }
 
-            // ✅ Rating selector SOLO si está en colección
-            if (isInCollection && userBook != null && onRatingChange != null) {
-                ElevatedCard(
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(16.dp)
-                    ) {
-                        RatingSelector(
-                            currentRating = userBook.personalRating,
-                            onRatingChange = { newRating ->
-                                onRatingChange(userBook.id, newRating)
-                            },
-                            enabled = true
-                        )
+                    if (isInCollection) {
+                        ElevatedCard(
+                            colors = CardDefaults.elevatedCardColors(
+                                containerColor = MaterialTheme.colorScheme.primaryContainer
+                            )
+                        ) {
+                            Text(
+                                text = "In Your Collection",
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer
+                            )
+                        }
                     }
                 }
-            }
 
-            // Additional book info (descripción, géneros, etc.)
-            if (book.description?.isNotBlank() == true) {
-                Column(
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Text(
-                        text = "Description",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold
-                    )
-
-                    ElevatedCard(
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Text(
-                            text = book.description,
-                            style = MaterialTheme.typography.bodyMedium,
-                            modifier = Modifier.padding(16.dp)
-                        )
-                    }
-                }
-            }
-
-            // ✅ NUEVO: Book metadata (genres, year, language)
-            if (!book.genres.isNullOrEmpty() || book.publicationYear != null || !book.language.isNullOrBlank()) {
-                Column(
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Text(
-                        text = "Information",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold
-                    )
-
-                    ElevatedCard(
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
+                // Rating selector (MANTENER)
+                if (isInCollection && userBook != null && onRatingChange != null) {
+                    ElevatedCard(modifier = Modifier.fillMaxWidth()) {
                         Column(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(16.dp),
-                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                                .padding(16.dp)
                         ) {
-                            if (!book.genres.isNullOrEmpty()) {
-                                InfoRow(
-                                    label = "Genres",
-                                    value = book.genres.joinToString(", ")
-                                )
-                            }
+                            RatingSelector(
+                                currentRating = userBook.personalRating,
+                                onRatingChange = { newRating ->
+                                    onRatingChange(userBook.id, newRating)
+                                },
+                                enabled = true
+                            )
+                        }
+                    }
+                }
 
-                            if (book.publicationYear != null) {
-                                InfoRow(
-                                    label = "Published",
-                                    value = book.publicationYear.toString()
-                                )
-                            }
+                // Description (MANTENER)
+                if (book.description?.isNotBlank() == true) {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text(
+                            text = "Description",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+                        ElevatedCard(modifier = Modifier.fillMaxWidth()) {
+                            Text(
+                                text = book.description,
+                                style = MaterialTheme.typography.bodyMedium,
+                                modifier = Modifier.padding(16.dp)
+                            )
+                        }
+                    }
+                }
 
-                            if (!book.language.isNullOrBlank()) {
-                                InfoRow(
-                                    label = "Language",
-                                    value = book.language.uppercase()
-                                )
+                // Book metadata (MANTENER)
+                if (!book.genres.isNullOrEmpty() || book.publicationYear != null || !book.language.isNullOrBlank()) {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text(
+                            text = "Information",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+                        ElevatedCard(modifier = Modifier.fillMaxWidth()) {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(16.dp),
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                if (!book.genres.isNullOrEmpty()) {
+                                    InfoRow(
+                                        label = "Genres",
+                                        value = book.genres.joinToString(", ")
+                                    )
+                                }
+                                if (book.publicationYear != null) {
+                                    InfoRow(
+                                        label = "Published",
+                                        value = book.publicationYear.toString()
+                                    )
+                                }
+                                if (!book.language.isNullOrBlank()) {
+                                    InfoRow(
+                                        label = "Language",
+                                        value = book.language.uppercase()
+                                    )
+                                }
                             }
                         }
                     }
                 }
-            }
 
-            // ✅ NUEVO: Action buttons
-            if (isInCollection) {
-                // Remove button
-                if (onRemoveFromCollection != null) {
-                    HorizontalDivider()
-
-                    OutlinedButton(
-                        onClick = { showRemoveDialog = true },
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = ButtonDefaults.outlinedButtonColors(
-                            contentColor = MaterialTheme.colorScheme.error
-                        )
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Delete,
-                            contentDescription = null,
-                            modifier = Modifier.size(18.dp)
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text("Remove from Collection")
+                // Action buttons (MANTENER)
+                if (isInCollection) {
+                    if (onRemoveFromCollection != null) {
+                        HorizontalDivider()
+                        OutlinedButton(
+                            onClick = { showRemoveDialog = true },
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = ButtonDefaults.outlinedButtonColors(
+                                contentColor = MaterialTheme.colorScheme.error
+                            )
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Delete,
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Remove from Collection")
+                        }
                     }
-                }
-            } else {
-                // Add button
-                if (onAddToCollection != null) {
-                    HorizontalDivider()
-
-                    Button(
-                        onClick = { showWishlistDialog = true },
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Add,
-                            contentDescription = null,
-                            modifier = Modifier.size(18.dp)
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text("Add to Collection")
+                } else {
+                    if (onAddToCollection != null) {
+                        HorizontalDivider()
+                        Button(
+                            onClick = { showWishlistDialog = true },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Add,
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Add to Collection")
+                        }
                     }
                 }
             }
+            // ========== FIN del wrapper con padding ==========
         }
     }
 
