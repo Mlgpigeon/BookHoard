@@ -270,6 +270,71 @@ class BooksCreationApiService(
             return BookCreationResult.Error(e.message ?: "Unknown error")
         }
     }
+
+
+    /**
+     * Update an existing book
+     */
+    suspend fun updateBook(
+        bookId: Long,
+        title: String,
+        description: String? = null,
+        images: List<String> = emptyList(),
+        coverSelected: String? = null
+    ): BookCreationResult {
+        try {
+            Log.d(TAG, "Updating book ID=$bookId: title='$title'")
+
+            val bookData = JSONObject().apply {
+                put("title", title.trim())
+                description?.let { if (it.isNotBlank()) put("description", it.trim()) }
+
+                // Images array
+                if (images.isNotEmpty()) {
+                    val imagesArray = JSONArray()
+                    images.forEach { imagesArray.put(it) }
+                    put("images", imagesArray)
+                }
+
+                // Cover selected
+                coverSelected?.let { put("cover_selected", it) }
+            }
+
+            Log.d(TAG, "Sending book update request: $bookData")
+            val response = apiClient.makeAuthenticatedRequest("books/$bookId", "PUT", bookData)
+
+            return when {
+                response.isSuccessful() -> {
+                    try {
+                        Log.d(TAG, "Update book response: ${response.body}")
+                        val json = JSONObject(response.body)
+
+                        if (!json.has("success") || !json.getBoolean("success")) {
+                            return BookCreationResult.Error("API returned unsuccessful response")
+                        }
+
+                        val data = json.getJSONObject("data")
+                        val book = ApiBook.fromJson(data)
+                        BookCreationResult.Success(book)
+
+                        Log.d(TAG, "Book updated successfully with ID: ${book.id} ")
+                        BookCreationResult.Success(book)
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Failed to parse update response", e)
+                        BookCreationResult.Error("Failed to parse response: ${e.message}")
+                    }
+                }
+                else -> {
+                    val errorMessage = apiClient.parseError(response.body)
+                    Log.e(TAG, "Book update failed: $errorMessage")
+                    BookCreationResult.Error(errorMessage)
+                }
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Exception during book update", e)
+            return BookCreationResult.Error("Update failed: ${e.message}")
+        }
+    }
 }
 
 /**

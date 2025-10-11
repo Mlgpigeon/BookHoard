@@ -3,18 +3,23 @@ package com.example.mybookhoard
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarDuration
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.unit.dp
@@ -29,6 +34,7 @@ import androidx.navigation.navArgument
 import com.example.mybookhoard.api.ImageUploadService
 import com.example.mybookhoard.api.auth.AuthApi
 import com.example.mybookhoard.api.auth.AuthState
+import com.example.mybookhoard.api.books.BookCreationResult
 import com.example.mybookhoard.api.books.BooksApiService
 import com.example.mybookhoard.api.books.UserBooksApiService
 import com.example.mybookhoard.api.books.BooksCreationApiService
@@ -407,14 +413,83 @@ class MainActivity : ComponentActivity() {
                         }
 
                         if (bookWithUserData != null) {
-                            EditBookScreen(
-                                bookWithUserData = bookWithUserData,
-                                onNavigateBack = { nav.popBackStack() },
-                                onSaveBook = { title, description, images, coverSelected ->
-                                    // TODO: Implement API save
-                                    nav.popBackStack()
+                            val coroutineScope = rememberCoroutineScope()
+                            var isSaving by remember { mutableStateOf(false) }
+                            val snackbarHostState = remember { SnackbarHostState() }
+
+                            // Access services from factories
+                            val booksCreationApiService = remember {
+                                BooksCreationApiService(
+                                    context = this@MainActivity,
+                                    authApi = AuthApi(this@MainActivity)
+                                )
+                            }
+
+                            Scaffold(
+                                snackbarHost = { SnackbarHost(snackbarHostState) }
+                            ) { paddingValues ->
+                                Box(modifier = androidx.compose.ui.Modifier.padding(paddingValues)) {
+                                    EditBookScreen(
+                                        bookWithUserData = bookWithUserData,
+                                        onNavigateBack = {
+                                            if (!isSaving) nav.popBackStack()
+                                        },
+                                        onSaveBook = { title, description, images, coverSelected ->
+                                            if (!isSaving) {
+                                                isSaving = true
+                                                coroutineScope.launch {
+                                                    try {
+                                                        when (val result = booksCreationApiService.updateBook(
+                                                            bookId = bookId,
+                                                            title = title,
+                                                            description = description,
+                                                            images = images,
+                                                            coverSelected = coverSelected
+                                                        )) {
+                                                            is BookCreationResult.Success -> {
+                                                                snackbarHostState.showSnackbar(
+                                                                    message = "Book updated successfully",
+                                                                    duration = SnackbarDuration.Short
+                                                                )
+                                                                kotlinx.coroutines.delay(500)
+                                                                libraryVm.refresh()
+                                                                nav.popBackStack()
+                                                            }
+                                                            is BookCreationResult.Error -> {
+                                                                snackbarHostState.showSnackbar(
+                                                                    message = "Error: ${result.message}",
+                                                                    duration = SnackbarDuration.Long
+                                                                )
+                                                            }
+                                                        }
+                                                    } catch (e: Exception) {
+                                                        snackbarHostState.showSnackbar(
+                                                            message = "Error updating book: ${e.message}",
+                                                            duration = SnackbarDuration.Long
+                                                        )
+                                                    } finally {
+                                                        isSaving = false
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    )
+
+                                    // Show loading overlay when saving
+                                    if (isSaving) {
+                                        Box(
+                                            modifier = androidx.compose.ui.Modifier
+                                                .fillMaxSize()
+                                                .background(
+                                                    MaterialTheme.colorScheme.surface.copy(alpha = 0.7f)
+                                                ),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            CircularProgressIndicator()
+                                        }
+                                    }
                                 }
-                            )
+                            }
                         }
                     }
                 }
